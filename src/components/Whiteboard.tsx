@@ -1,5 +1,5 @@
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StickyNote } from "./StickyNote";
 import { DrawingCanvas } from "./DrawingCanvas";
@@ -34,9 +34,11 @@ interface TextElementType {
 export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const whiteboardRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
-  const [userName] = useState(() => `User${Math.floor(Math.random() * 1000)}`);
+  const [userName] = useState(() => 
+    localStorage.getItem('solid_username') || `User${Math.floor(Math.random() * 1000)}`
+  );
 
-  // Fetch sticky notes
+  // Optimized fetch with shorter refetch interval for real-time feel
   const { data: stickyNotes = [] } = useQuery({
     queryKey: ['sticky-notes', roomId],
     queryFn: async () => {
@@ -49,9 +51,9 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       if (error) throw error;
       return data as StickyNoteType[];
     },
+    refetchInterval: 1000, // Faster updates
   });
 
-  // Fetch text elements
   const { data: textElements = [] } = useQuery({
     queryKey: ['text-elements', roomId],
     queryFn: async () => {
@@ -64,12 +66,13 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       if (error) throw error;
       return data as TextElementType[];
     },
+    refetchInterval: 1000, // Faster updates
   });
 
-  // Set up real-time subscriptions
+  // Optimized real-time subscriptions
   useEffect(() => {
     const stickyNotesChannel = supabase
-      .channel('sticky-notes-changes')
+      .channel(`sticky-notes-${roomId}`)
       .on(
         'postgres_changes',
         {
@@ -85,7 +88,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       .subscribe();
 
     const textElementsChannel = supabase
-      .channel('text-elements-changes')
+      .channel(`text-elements-${roomId}`)
       .on(
         'postgres_changes',
         {
@@ -106,7 +109,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     };
   }, [roomId, queryClient]);
 
-  const handleWhiteboardClick = async (e: React.MouseEvent) => {
+  const handleWhiteboardClick = useCallback(async (e: React.MouseEvent) => {
     if (currentTool === 'select' || currentTool === 'pen') return;
 
     const rect = whiteboardRef.current?.getBoundingClientRect();
@@ -115,8 +118,26 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    // Optimistic updates for faster UI response
     if (currentTool === 'sticky') {
-      await supabase.from('sticky_notes').insert({
+      const tempNote = {
+        id: `temp-${Date.now()}`,
+        content: 'New idea...',
+        x_position: x,
+        y_position: y,
+        color: 'yellow',
+        votes: 0,
+        created_by: userName,
+      };
+
+      // Update cache immediately
+      queryClient.setQueryData(['sticky-notes', roomId], (old: StickyNoteType[] = []) => [
+        ...old,
+        tempNote as StickyNoteType
+      ]);
+
+      // Then save to database
+      const { error } = await supabase.from('sticky_notes').insert({
         room_id: roomId,
         content: 'New idea...',
         x_position: x,
@@ -124,8 +145,30 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         color: 'yellow',
         created_by: userName,
       });
+
+      if (error) {
+        // Revert on error
+        queryClient.invalidateQueries({ queryKey: ['sticky-notes', roomId] });
+      }
     } else if (currentTool === 'text') {
-      await supabase.from('text_elements').insert({
+      const tempText = {
+        id: `temp-${Date.now()}`,
+        content: 'Text...',
+        x_position: x,
+        y_position: y,
+        font_size: 16,
+        color: 'black',
+        created_by: userName,
+      };
+
+      // Update cache immediately
+      queryClient.setQueryData(['text-elements', roomId], (old: TextElementType[] = []) => [
+        ...old,
+        tempText as TextElementType
+      ]);
+
+      // Then save to database
+      const { error } = await supabase.from('text_elements').insert({
         room_id: roomId,
         content: 'Text...',
         x_position: x,
@@ -134,13 +177,38 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         color: 'black',
         created_by: userName,
       });
+
+      if (error) {
+        // Revert on error
+        queryClient.invalidateQueries({ queryKey: ['text-elements', roomId] });
+      }
+    }
+  }, [currentTool, roomId, userName, queryClient]);
+
+  const getCursorClass = () => {
+    switch (currentTool) {
+      case 'sticky': return 'cursor-copy';
+      case 'pen': return 'cursor-crosshair';
+      case 'text': return 'cursor-text';
+      case 'select': return 'cursor-default';
+      default: return 'cursor-default';
+    }
+  };
+
+  const getToolInstruction = () => {
+    switch (currentTool) {
+      case 'sticky': return 'Click anywhere to add a sticky note';
+      case 'pen': return 'Click and drag to draw';
+      case 'text': return 'Click anywhere to add text';
+      case 'select': return 'Click and drag to move items';
+      default: return '';
     }
   };
 
   return (
     <div
       ref={whiteboardRef}
-      className="w-full h-full bg-gray-50 relative overflow-hidden cursor-crosshair"
+      className={`w-full h-full bg-gray-50 relative overflow-hidden ${getCursorClass()}`}
       onClick={handleWhiteboardClick}
     >
       {/* Drawing Canvas */}
@@ -170,14 +238,17 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         />
       ))}
 
-      {/* Tool cursor indicator */}
-      <div className="absolute top-4 left-4 bg-white/90 px-3 py-2 rounded-lg shadow-sm">
-        <span className="text-sm font-medium text-gray-700">
-          {currentTool === 'sticky' && 'Click to add sticky note'}
-          {currentTool === 'pen' && 'Click and drag to draw'}
-          {currentTool === 'text' && 'Click to add text'}
-          {currentTool === 'select' && 'Click to select and move items'}
-        </span>
+      {/* Tool instruction */}
+      <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg shadow-lg border">
+        <div className="flex items-center space-x-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <span className="text-sm font-medium text-gray-700">
+            {getToolInstruction()}
+          </span>
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          Collaborating as: {userName}
+        </div>
       </div>
     </div>
   );

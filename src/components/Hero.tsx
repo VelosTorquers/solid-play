@@ -1,142 +1,116 @@
 
-'use client'
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
-import { SplineScene } from "@/components/ui/spline";
-import { Card } from "@/components/ui/card"
-import { Spotlight } from "@/components/ui/spotlight"
-import { Button } from "@/components/ui/button"
-import { motion } from "framer-motion"
-import { useNavigate } from "react-router-dom"
-import { supabase } from "@/integrations/supabase/client"
-import { toast } from "@/hooks/use-toast"
- 
 export function Hero() {
+  const [isCreating, setIsCreating] = useState(false);
+  const [username, setUsername] = useState("");
   const navigate = useNavigate();
 
+  const generateRoomCode = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  };
+
   const createRoom = async () => {
-    try {
-      // Generate room code
-      const { data: roomCode, error: codeError } = await supabase
-        .rpc('generate_room_code');
-      
-      if (codeError || !roomCode) {
-        toast({
-          title: "Error",
-          description: "Failed to create room. Please try again.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Create room
-      const { error: roomError } = await supabase
-        .from('rooms')
-        .insert({
-          id: roomCode,
-          is_active: true,
-        });
-
-      if (roomError) {
-        toast({
-          title: "Error", 
-          description: "Failed to create room. Please try again.",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Navigate to room
-      navigate(`/room/${roomCode}`);
-      
-    } catch (error) {
-      console.error('Room creation error:', error);
+    if (!username.trim()) {
       toast({
-        title: "Error",
-        description: "Something went wrong. Please try again.",
+        title: "Username required",
+        description: "Please enter your name before creating a room.",
         variant: "destructive"
       });
+      return;
+    }
+
+    setIsCreating(true);
+    const roomCode = generateRoomCode();
+    
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .insert({ id: roomCode });
+      
+      if (error) throw error;
+      
+      // Store username in localStorage
+      localStorage.setItem('solid_username', username.trim());
+      
+      navigate(`/room/${roomCode}`);
+    } catch (error) {
+      console.error('Error creating room:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create room. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCreating(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 relative overflow-hidden">
-      <Card className="w-full h-screen bg-black/[0.96] relative overflow-hidden border-0 rounded-none">
-        <Spotlight
-          className="-top-40 left-0 md:left-60 md:-top-20"
-          fill="white"
-        />
-        
-        <div className="flex h-full flex-col lg:flex-row">
-          {/* Left content */}
-          <div className="flex-1 p-8 lg:p-16 relative z-10 flex flex-col justify-center min-h-[50vh] lg:min-h-full">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8 }}
-            >
-              <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-b from-neutral-50 via-neutral-200 to-neutral-400 leading-tight">
-                Solid
-              </h1>
-              <h2 className="text-2xl md:text-3xl font-light text-neutral-300 mt-2 mb-6">
-                Team Brainstorming Board
-              </h2>
-              <p className="mt-4 text-neutral-300 max-w-lg text-lg leading-relaxed">
-                Zero friction collaboration. No signups, no downloads. 
-                Just share a room code and start brainstorming together in real-time.
-              </p>
-              
-              <div className="mt-8 flex gap-4 flex-col sm:flex-row">
-                <Button 
-                  size="lg" 
-                  onClick={createRoom}
-                  className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-black font-semibold px-8 py-3"
-                >
-                  Start Brainstorming Now
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="lg"
-                  onClick={() => navigate('/join')}
-                  className="border-neutral-600 text-neutral-200 hover:bg-neutral-800 px-8 py-3"
-                >
-                  Join Room
-                </Button>
-              </div>
+    <section className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white overflow-hidden">
+      {/* Background elements */}
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.1)_0%,transparent_70%)]" />
+      
+      <div className="relative z-10 text-center max-w-4xl mx-auto px-6">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+        >
+          <h1 className="text-6xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+            Zero-friction
+            <br />
+            <span className="bg-gradient-to-r from-amber-500 to-yellow-600 bg-clip-text text-transparent">
+              brainstorming
+            </span>
+          </h1>
+          
+          <p className="text-xl md:text-2xl text-gray-300 mb-12 leading-relaxed">
+            Create. Collaborate. Export.<br />
+            No accounts. No downloads. Just ideas.
+          </p>
 
-              {/* Quick features */}
-              <div className="mt-12 space-y-3">
-                <div className="flex items-center space-x-3 text-neutral-400">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                  <span>No account required - instant collaboration</span>
-                </div>
-                <div className="flex items-center space-x-3 text-neutral-400">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                  <span>Sticky notes, drawing, and text tools</span>
-                </div>
-                <div className="flex items-center space-x-3 text-neutral-400">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                  <span>Auto-expires in 24 hours for privacy</span>
-                </div>
-              </div>
-            </motion.div>
+          <div className="flex flex-col items-center space-y-4 max-w-md mx-auto">
+            <Input
+              type="text"
+              placeholder="Enter your name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full text-center text-lg bg-white/10 border-white/20 text-white placeholder:text-gray-400 backdrop-blur-sm"
+              maxLength={30}
+            />
+            
+            <Button
+              onClick={createRoom}
+              disabled={isCreating || !username.trim()}
+              size="lg"
+              className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-black font-semibold text-lg py-6 rounded-xl transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreating ? "Creating Room..." : "Start Brainstorming Now"}
+            </Button>
           </div>
 
-          {/* Right content - 3D Scene */}
-          <div className="flex-1 relative min-h-[400px] lg:min-h-full">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 1, delay: 0.3 }}
-              className="w-full h-full"
-            >
-              <SplineScene 
-                scene="https://prod.spline.design/kZDDjO5HuC9GJUM2/scene.splinecode"
-                className="w-full h-full"
-              />
-            </motion.div>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1, duration: 0.6 }}
+            className="mt-12 text-gray-400"
+          >
+            <p>Sessions auto-expire in 24 hours • Complete privacy • No data stored</p>
           </div>
-        </div>
-      </Card>
-    </div>
-  )
+        </motion.div>
+      </div>
+    </section>
+  );
 }

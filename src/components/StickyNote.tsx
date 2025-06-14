@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Heart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,11 +19,11 @@ interface StickyNoteProps {
 }
 
 const colorClasses = {
-  yellow: 'bg-yellow-200 border-yellow-300',
-  blue: 'bg-blue-200 border-blue-300',
-  green: 'bg-green-200 border-green-300',
-  pink: 'bg-pink-200 border-pink-300',
-  orange: 'bg-orange-200 border-orange-300',
+  yellow: 'bg-yellow-200 border-yellow-300 shadow-yellow-100',
+  blue: 'bg-blue-200 border-blue-300 shadow-blue-100',
+  green: 'bg-green-200 border-green-300 shadow-green-100',
+  pink: 'bg-pink-200 border-pink-300 shadow-pink-100',
+  orange: 'bg-orange-200 border-orange-300 shadow-orange-100',
 };
 
 export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
@@ -31,73 +31,81 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: note.x_position, y: note.y_position });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContent(note.content);
-  }, [note.content]);
+    setPosition({ x: note.x_position, y: note.y_position });
+  }, [note.content, note.x_position, note.y_position]);
 
-  const handleContentSave = async () => {
+  const handleContentSave = useCallback(async () => {
     if (content.trim() !== note.content) {
       await supabase
         .from('sticky_notes')
-        .update({ content: content.trim(), updated_at: new Date().toISOString() })
+        .update({ content: content.trim() })
         .eq('id', note.id);
     }
     setIsEditing(false);
-  };
+  }, [content, note.content, note.id]);
 
-  const handleVote = async (e: React.MouseEvent) => {
+  const handleVote = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     await supabase
       .from('sticky_notes')
       .update({ votes: note.votes + 1 })
       .eq('id', note.id);
-  };
+  }, [note.votes, note.id]);
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     await supabase
       .from('sticky_notes')
       .delete()
       .eq('id', note.id);
-  };
+  }, [note.id]);
 
-  const handleColorChange = async (newColor: string) => {
+  const handleColorChange = useCallback(async (newColor: string) => {
     await supabase
       .from('sticky_notes')
       .update({ color: newColor })
       .eq('id', note.id);
-  };
+  }, [note.id]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!isSelectable || isEditing) return;
     
+    e.preventDefault();
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - note.x_position,
-      y: e.clientY - note.y_position,
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
     });
-  };
+  }, [isSelectable, isEditing, position]);
 
-  const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
-    const newX = e.clientX - dragStart.x;
-    const newY = e.clientY - dragStart.y;
+    const newX = Math.max(0, e.clientX - dragStart.x);
+    const newY = Math.max(0, e.clientY - dragStart.y);
     
-    supabase
+    setPosition({ x: newX, y: newY });
+  }, [isDragging, dragStart]);
+
+  const handleMouseUp = useCallback(async () => {
+    if (!isDragging) return;
+    
+    setIsDragging(false);
+    
+    // Update database with final position
+    await supabase
       .from('sticky_notes')
       .update({ 
-        x_position: Math.max(0, newX), 
-        y_position: Math.max(0, newY) 
+        x_position: position.x, 
+        y_position: position.y 
       })
       .eq('id', note.id);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  }, [isDragging, position, note.id]);
 
   useEffect(() => {
     if (isDragging) {
@@ -108,30 +116,34 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
         document.removeEventListener('mouseup', handleMouseUp);
       };
     }
-  }, [isDragging, dragStart]);
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isDragging && !isSelectable) {
+      setIsEditing(true);
+    }
+  }, [isDragging, isSelectable]);
 
   return (
     <div
-      className={`absolute w-48 min-h-32 p-3 border-2 rounded-lg shadow-lg ${
+      className={`absolute w-48 min-h-32 p-3 border-2 rounded-lg shadow-lg transition-all duration-200 group ${
         colorClasses[note.color as keyof typeof colorClasses] || colorClasses.yellow
-      } ${isSelectable ? 'cursor-move' : 'cursor-pointer'} ${isDragging ? 'opacity-75' : ''}`}
-      style={{ left: note.x_position, top: note.y_position }}
+      } ${isSelectable ? 'cursor-move hover:shadow-xl' : 'cursor-pointer hover:shadow-md'} ${
+        isDragging ? 'opacity-75 scale-105 z-50' : 'hover:scale-102'
+      }`}
+      style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!isDragging && !isSelectable) {
-          setIsEditing(true);
-        }
-      }}
+      onClick={handleClick}
     >
       {/* Color palette */}
-      <div className="flex space-x-1 mb-2">
+      <div className="flex space-x-1 mb-2 opacity-0 group-hover:opacity-100 transition-opacity">
         {Object.keys(colorClasses).map((color) => (
           <button
             key={color}
-            className={`w-4 h-4 rounded-full border ${
+            className={`w-4 h-4 rounded-full border-2 hover:scale-110 transition-transform ${
               colorClasses[color as keyof typeof colorClasses]
-            } ${note.color === color ? 'ring-2 ring-gray-400' : ''}`}
+            } ${note.color === color ? 'ring-2 ring-gray-500' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               handleColorChange(color);
@@ -156,11 +168,12 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
               setIsEditing(false);
             }
           }}
-          className="w-full h-20 bg-transparent border-none outline-none resize-none text-sm"
+          className="w-full h-20 bg-transparent border-none outline-none resize-none text-sm placeholder:text-gray-500"
           autoFocus
+          placeholder="Type your idea..."
         />
       ) : (
-        <div className="text-sm whitespace-pre-wrap min-h-20">
+        <div className="text-sm whitespace-pre-wrap min-h-20 break-words">
           {content}
         </div>
       )}
@@ -172,7 +185,7 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
             variant="ghost"
             size="sm"
             onClick={handleVote}
-            className="h-6 px-2 text-xs"
+            className="h-6 px-2 text-xs hover:bg-white/50 transition-colors"
           >
             <Heart className="h-3 w-3 mr-1" />
             {note.votes}
@@ -180,12 +193,12 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
         </div>
         
         <div className="flex items-center space-x-1">
-          <span className="text-xs text-gray-500">{note.created_by}</span>
+          <span className="text-xs text-gray-600 font-medium">{note.created_by}</span>
           <Button
             variant="ghost"
             size="sm"
             onClick={handleDelete}
-            className="h-6 w-6 p-1 text-red-500 hover:text-red-700"
+            className="h-6 w-6 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
           >
             <X className="h-3 w-3" />
           </Button>
