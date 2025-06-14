@@ -9,13 +9,199 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      drawings: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          path_data: string
+          room_id: string | null
+          stroke_width: number | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          path_data: string
+          room_id?: string | null
+          stroke_width?: number | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          path_data?: string
+          room_id?: string | null
+          stroke_width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drawings_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string
+          role: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id: string
+          role?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rooms: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id: string
+          is_active?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean | null
+        }
+        Relationships: []
+      }
+      sticky_notes: {
+        Row: {
+          color: string | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          room_id: string | null
+          updated_at: string | null
+          votes: number | null
+          x_position: number
+          y_position: number
+        }
+        Insert: {
+          color?: string | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          room_id?: string | null
+          updated_at?: string | null
+          votes?: number | null
+          x_position?: number
+          y_position?: number
+        }
+        Update: {
+          color?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          room_id?: string | null
+          updated_at?: string | null
+          votes?: number | null
+          x_position?: number
+          y_position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sticky_notes_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      text_elements: {
+        Row: {
+          color: string | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          font_size: number | null
+          id: string
+          room_id: string | null
+          updated_at: string | null
+          x_position: number
+          y_position: number
+        }
+        Insert: {
+          color?: string | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          font_size?: number | null
+          id?: string
+          room_id?: string | null
+          updated_at?: string | null
+          x_position?: number
+          y_position?: number
+        }
+        Update: {
+          color?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          font_size?: number | null
+          id?: string
+          room_id?: string | null
+          updated_at?: string | null
+          x_position?: number
+          y_position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_elements_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      cleanup_expired_rooms: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      generate_room_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
