@@ -1,91 +1,164 @@
 
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Palette, Brush } from "lucide-react";
+import { Palette, Brush, Square, Circle, ArrowRight, Triangle, Minus } from "lucide-react";
 import { useState } from "react";
 
 interface DrawingToolbarProps {
   isVisible: boolean;
   brushSize: number;
   brushColor: string;
+  currentTool: string;
   onBrushSizeChange: (size: number) => void;
   onBrushColorChange: (color: string) => void;
+  onToolChange: (tool: string) => void;
 }
 
-const colorPalette = [
-  '#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', 
-  '#FF00FF', '#00FFFF', '#FFA500', '#800080', '#008000',
-  '#FFC0CB', '#A52A2A', '#808080', '#000080', '#800000'
-];
+const colorCategories = {
+  basic: ['#000000', '#FFFFFF', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'],
+  grays: ['#000000', '#333333', '#666666', '#999999', '#CCCCCC', '#EEEEEE', '#F5F5F5', '#FFFFFF'],
+  reds: ['#8B0000', '#B22222', '#DC143C', '#FF0000', '#FF6347', '#FF7F7F', '#FFB6C1', '#FFC0CB'],
+  blues: ['#000080', '#0000CD', '#0000FF', '#1E90FF', '#4169E1', '#87CEEB', '#ADD8E6', '#E0F6FF'],
+  greens: ['#006400', '#008000', '#228B22', '#32CD32', '#7CFC00', '#ADFF2F', '#98FB98', '#F0FFF0'],
+  yellows: ['#FFD700', '#FFFF00', '#FFFFE0', '#FFFACD', '#FFF8DC', '#FFEFD5', '#FFE4B5', '#FFDAB9'],
+  purples: ['#4B0082', '#663399', '#800080', '#9932CC', '#BA55D3', '#DA70D6', '#DDA0DD', '#E6E6FA'],
+  oranges: ['#8B4513', '#D2691E', '#FF4500', '#FF6347', '#FF7F50', '#FFA500', '#FFB347', '#FFDAB9']
+};
 
 export function DrawingToolbar({ 
   isVisible, 
   brushSize, 
   brushColor, 
+  currentTool,
   onBrushSizeChange, 
-  onBrushColorChange 
+  onBrushColorChange,
+  onToolChange
 }: DrawingToolbarProps) {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [activeColorCategory, setActiveColorCategory] = useState('basic');
 
   if (!isVisible) return null;
 
+  const tools = [
+    { id: 'pen', icon: Brush, label: 'Free Draw' },
+    { id: 'line', icon: Minus, label: 'Line' },
+    { id: 'rectangle', icon: Square, label: 'Rectangle' },
+    { id: 'circle', icon: Circle, label: 'Circle' },
+    { id: 'triangle', icon: Triangle, label: 'Triangle' },
+    { id: 'arrow', icon: ArrowRight, label: 'Arrow' },
+  ];
+
   return (
-    <div className="absolute top-20 left-4 bg-white rounded-lg shadow-lg border p-4 z-20 min-w-[280px]">
-      <div className="space-y-4">
+    <div className="absolute top-20 left-4 bg-white rounded-lg shadow-xl border p-4 z-20 min-w-[320px] max-h-[80vh] overflow-y-auto">
+      <div className="space-y-6">
+        {/* Drawing Tools */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-700">Drawing Tools</h3>
+          <div className="grid grid-cols-3 gap-2">
+            {tools.map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <Button
+                  key={tool.id}
+                  variant={currentTool === tool.id ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => onToolChange(tool.id)}
+                  className="flex flex-col items-center space-y-1 h-16 text-xs"
+                >
+                  <Icon className="h-4 w-4" />
+                  <span>{tool.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Brush Size */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           <div className="flex items-center space-x-2">
             <Brush className="h-4 w-4" />
-            <span className="text-sm font-medium">Brush Size: {brushSize}px</span>
+            <span className="text-sm font-medium">Size: {brushSize}px</span>
           </div>
           <Slider
             value={[brushSize]}
             onValueChange={(value) => onBrushSizeChange(value[0])}
-            max={20}
+            max={50}
             min={1}
             step={1}
             className="w-full"
           />
+          <div className="flex justify-between text-xs text-gray-500">
+            <span>1px</span>
+            <span>50px</span>
+          </div>
         </div>
 
         {/* Color Picker */}
-        <div className="space-y-2">
-          <div className="flex items-center space-x-2">
-            <Palette className="h-4 w-4" />
-            <span className="text-sm font-medium">Color</span>
-          </div>
-          
-          <div className="flex items-center space-x-2">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Palette className="h-4 w-4" />
+              <span className="text-sm font-medium">Color</span>
+            </div>
             <div 
-              className="w-8 h-8 rounded border-2 border-gray-300 cursor-pointer"
+              className="w-8 h-8 rounded-full border-3 border-gray-300 cursor-pointer shadow-sm"
               style={{ backgroundColor: brushColor }}
               onClick={() => setShowColorPicker(!showColorPicker)}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowColorPicker(!showColorPicker)}
-            >
-              Pick Color
-            </Button>
           </div>
 
           {showColorPicker && (
-            <div className="grid grid-cols-5 gap-2 p-2 bg-gray-50 rounded">
-              {colorPalette.map((color) => (
-                <button
-                  key={color}
-                  className="w-8 h-8 rounded border-2 hover:scale-110 transition-transform"
-                  style={{ 
-                    backgroundColor: color,
-                    borderColor: brushColor === color ? '#333' : '#ddd'
-                  }}
-                  onClick={() => {
-                    onBrushColorChange(color);
-                    setShowColorPicker(false);
-                  }}
+            <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
+              {/* Color Category Tabs */}
+              <div className="flex flex-wrap gap-1">
+                {Object.keys(colorCategories).map((category) => (
+                  <Button
+                    key={category}
+                    variant={activeColorCategory === category ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setActiveColorCategory(category)}
+                    className="text-xs px-2 py-1 h-7"
+                  >
+                    {category.charAt(0).toUpperCase() + category.slice(1)}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Color Grid */}
+              <div className="grid grid-cols-8 gap-1">
+                {colorCategories[activeColorCategory as keyof typeof colorCategories].map((color) => (
+                  <button
+                    key={color}
+                    className="w-8 h-8 rounded border-2 hover:scale-110 transition-transform shadow-sm"
+                    style={{ 
+                      backgroundColor: color,
+                      borderColor: brushColor === color ? '#333' : '#ddd'
+                    }}
+                    onClick={() => {
+                      onBrushColorChange(color);
+                    }}
+                    title={color}
+                  />
+                ))}
+              </div>
+
+              {/* Custom Color Input */}
+              <div className="flex items-center space-x-2 pt-2 border-t">
+                <span className="text-xs text-gray-600">Custom:</span>
+                <input
+                  type="color"
+                  value={brushColor}
+                  onChange={(e) => onBrushColorChange(e.target.value)}
+                  className="w-8 h-8 rounded border cursor-pointer"
                 />
-              ))}
+                <input
+                  type="text"
+                  value={brushColor}
+                  onChange={(e) => onBrushColorChange(e.target.value)}
+                  className="text-xs px-2 py-1 border rounded flex-1 font-mono"
+                  placeholder="#000000"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -93,12 +166,12 @@ export function DrawingToolbar({
         {/* Brush Preview */}
         <div className="space-y-2">
           <span className="text-sm font-medium">Preview</span>
-          <div className="flex justify-center p-4 bg-gray-50 rounded">
+          <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
             <div 
-              className="rounded-full"
+              className="rounded-full shadow-sm"
               style={{
-                width: `${brushSize}px`,
-                height: `${brushSize}px`,
+                width: `${Math.max(brushSize, 4)}px`,
+                height: `${Math.max(brushSize, 4)}px`,
                 backgroundColor: brushColor
               }}
             />

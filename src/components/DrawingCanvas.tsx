@@ -1,4 +1,3 @@
-
 import { useRef, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +8,7 @@ interface DrawingCanvasProps {
   userName: string;
   brushSize: number;
   brushColor: string;
+  drawingTool: string;
 }
 
 interface Drawing {
@@ -19,10 +19,11 @@ interface Drawing {
   created_by: string;
 }
 
-export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColor }: DrawingCanvasProps) {
+export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColor, drawingTool }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>('');
+  const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch drawings
@@ -102,18 +103,69 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     return () => window.removeEventListener('resize', resizeCanvas);
   }, []);
 
+  const getMousePos = (e: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+  };
+
+  const createShapePath = (tool: string, start: {x: number, y: number}, end: {x: number, y: number}) => {
+    switch (tool) {
+      case 'line':
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+      
+      case 'rectangle':
+        const width = end.x - start.x;
+        const height = end.y - start.y;
+        return `M ${start.x} ${start.y} L ${end.x} ${start.y} L ${end.x} ${end.y} L ${start.x} ${end.y} Z`;
+      
+      case 'circle':
+        const centerX = (start.x + end.x) / 2;
+        const centerY = (start.y + end.y) / 2;
+        const radiusX = Math.abs(end.x - start.x) / 2;
+        const radiusY = Math.abs(end.y - start.y) / 2;
+        return `M ${centerX - radiusX} ${centerY} A ${radiusX} ${radiusY} 0 1 1 ${centerX + radiusX} ${centerY} A ${radiusX} ${radiusY} 0 1 1 ${centerX - radiusX} ${centerY}`;
+      
+      case 'triangle':
+        const topX = (start.x + end.x) / 2;
+        return `M ${topX} ${start.y} L ${end.x} ${end.y} L ${start.x} ${end.y} Z`;
+      
+      case 'arrow':
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        
+        const arrowLength = Math.min(length * 0.3, 20);
+        const arrowAngle = Math.PI / 6;
+        
+        const arrowX1 = end.x - arrowLength * Math.cos(angle - arrowAngle);
+        const arrowY1 = end.y - arrowLength * Math.sin(angle - arrowAngle);
+        const arrowX2 = end.x - arrowLength * Math.cos(angle + arrowAngle);
+        const arrowY2 = end.y - arrowLength * Math.sin(angle + arrowAngle);
+        
+        return `M ${start.x} ${start.y} L ${end.x} ${end.y} M ${end.x} ${end.y} L ${arrowX1} ${arrowY1} M ${end.x} ${end.y} L ${arrowX2} ${arrowY2}`;
+      
+      default:
+        return '';
+    }
+  };
+
   const startDrawing = (e: React.MouseEvent) => {
     if (!isActive) return;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
+    const pos = getMousePos(e);
     setIsDrawing(true);
-    setCurrentPath(`M ${x} ${y}`);
+    setStartPoint(pos);
+
+    if (drawingTool === 'pen') {
+      setCurrentPath(`M ${pos.x} ${pos.y}`);
+    }
   };
 
   const draw = (e: React.MouseEvent) => {
@@ -122,57 +174,73 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    setCurrentPath(prev => `${prev} L ${x} ${y}`);
-
-    // Draw current stroke with live preview
     const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.strokeStyle = brushColor;
-      ctx.lineWidth = brushSize;
+    if (!ctx) return;
+
+    const pos = getMousePos(e);
+
+    // Clear canvas and redraw all existing drawings
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    drawings.forEach((drawing) => {
+      const existingPath = new Path2D(drawing.path_data);
+      ctx.strokeStyle = drawing.color;
+      ctx.lineWidth = drawing.stroke_width;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      
-      const path = new Path2D(currentPath + ` L ${x} ${y}`);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Redraw all existing drawings
-      drawings.forEach((drawing) => {
-        const existingPath = new Path2D(drawing.path_data);
-        ctx.strokeStyle = drawing.color;
-        ctx.lineWidth = drawing.stroke_width;
-        ctx.stroke(existingPath);
-      });
-      
-      // Draw current path with current brush settings
-      ctx.strokeStyle = brushColor;
-      ctx.lineWidth = brushSize;
+      ctx.stroke(existingPath);
+    });
+
+    // Draw current path/shape
+    ctx.strokeStyle = brushColor;
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (drawingTool === 'pen') {
+      setCurrentPath(prev => `${prev} L ${pos.x} ${pos.y}`);
+      const path = new Path2D(currentPath + ` L ${pos.x} ${pos.y}`);
       ctx.stroke(path);
+    } else if (startPoint) {
+      // For shapes, create preview
+      const shapePath = createShapePath(drawingTool, startPoint, pos);
+      if (shapePath) {
+        const path = new Path2D(shapePath);
+        ctx.stroke(path);
+      }
     }
   };
 
-  const stopDrawing = async () => {
-    if (!isDrawing || !currentPath) return;
+  const stopDrawing = async (e: React.MouseEvent) => {
+    if (!isDrawing) return;
 
     setIsDrawing(false);
+    
+    let pathToSave = '';
 
-    // Save drawing to database with current brush settings
-    const { error } = await supabase.from('drawings').insert({
-      room_id: roomId,
-      path_data: currentPath,
-      color: brushColor,
-      stroke_width: brushSize,
-      created_by: userName,
-    });
+    if (drawingTool === 'pen') {
+      pathToSave = currentPath;
+    } else if (startPoint) {
+      const pos = getMousePos(e);
+      pathToSave = createShapePath(drawingTool, startPoint, pos);
+    }
 
-    if (error) {
-      console.error('Error saving drawing:', error);
+    if (pathToSave) {
+      const { error } = await supabase.from('drawings').insert({
+        room_id: roomId,
+        path_data: pathToSave,
+        color: brushColor,
+        stroke_width: brushSize,
+        created_by: userName,
+      });
+
+      if (error) {
+        console.error('Error saving drawing:', error);
+      }
     }
 
     setCurrentPath('');
+    setStartPoint(null);
   };
 
   return (

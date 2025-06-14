@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StickyNote } from "./StickyNote";
@@ -42,6 +41,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   // Drawing state
   const [brushSize, setBrushSize] = useState(3);
   const [brushColor, setBrushColor] = useState('#000000');
+  const [drawingTool, setDrawingTool] = useState('pen');
 
   // Optimized fetch with shorter refetch interval for real-time feel
   const { data: stickyNotes = [] } = useQuery({
@@ -205,7 +205,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const getToolInstruction = () => {
     switch (currentTool) {
       case 'sticky': return 'Click anywhere to add a sticky note';
-      case 'pen': return 'Click and drag to draw with your brush';
+      case 'pen': return `Draw with ${drawingTool} tool • Size: ${brushSize}px • Color: ${brushColor}`;
       case 'text': return 'Click anywhere to add text';
       case 'select': return 'Click and drag to move items';
       default: return '';
@@ -225,6 +225,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         userName={userName}
         brushSize={brushSize}
         brushColor={brushColor}
+        drawingTool={drawingTool}
       />
 
       {/* Drawing Toolbar */}
@@ -232,8 +233,10 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         isVisible={currentTool === 'pen'}
         brushSize={brushSize}
         brushColor={brushColor}
+        currentTool={drawingTool}
         onBrushSizeChange={setBrushSize}
         onBrushColorChange={setBrushColor}
+        onToolChange={setDrawingTool}
       />
 
       {/* Sticky Notes */}
