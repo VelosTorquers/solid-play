@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StickyNote } from "./StickyNote";
 import { DrawingCanvas } from "./DrawingCanvas";
+import { DrawingToolbar } from "./DrawingToolbar";
 import { TextElement } from "./TextElement";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -38,6 +39,10 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     localStorage.getItem('solid_username') || `User${Math.floor(Math.random() * 1000)}`
   );
 
+  // Drawing state
+  const [brushSize, setBrushSize] = useState(3);
+  const [brushColor, setBrushColor] = useState('#000000');
+
   // Optimized fetch with shorter refetch interval for real-time feel
   const { data: stickyNotes = [] } = useQuery({
     queryKey: ['sticky-notes', roomId],
@@ -51,7 +56,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       if (error) throw error;
       return data as StickyNoteType[];
     },
-    refetchInterval: 1000, // Faster updates
+    refetchInterval: 500, // Faster updates
   });
 
   const { data: textElements = [] } = useQuery({
@@ -66,7 +71,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       if (error) throw error;
       return data as TextElementType[];
     },
-    refetchInterval: 1000, // Faster updates
+    refetchInterval: 500, // Faster updates
   });
 
   // Optimized real-time subscriptions
@@ -149,6 +154,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       if (error) {
         // Revert on error
         queryClient.invalidateQueries({ queryKey: ['sticky-notes', roomId] });
+        console.error('Error creating sticky note:', error);
       }
     } else if (currentTool === 'text') {
       const tempText = {
@@ -181,6 +187,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       if (error) {
         // Revert on error
         queryClient.invalidateQueries({ queryKey: ['text-elements', roomId] });
+        console.error('Error creating text element:', error);
       }
     }
   }, [currentTool, roomId, userName, queryClient]);
@@ -198,7 +205,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const getToolInstruction = () => {
     switch (currentTool) {
       case 'sticky': return 'Click anywhere to add a sticky note';
-      case 'pen': return 'Click and drag to draw';
+      case 'pen': return 'Click and drag to draw with your brush';
       case 'text': return 'Click anywhere to add text';
       case 'select': return 'Click and drag to move items';
       default: return '';
@@ -216,6 +223,17 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         roomId={roomId} 
         isActive={currentTool === 'pen'}
         userName={userName}
+        brushSize={brushSize}
+        brushColor={brushColor}
+      />
+
+      {/* Drawing Toolbar */}
+      <DrawingToolbar
+        isVisible={currentTool === 'pen'}
+        brushSize={brushSize}
+        brushColor={brushColor}
+        onBrushSizeChange={setBrushSize}
+        onBrushColorChange={setBrushColor}
       />
 
       {/* Sticky Notes */}
@@ -249,6 +267,11 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         <div className="text-xs text-gray-500 mt-1">
           Collaborating as: {userName}
         </div>
+        {currentTool === 'pen' && (
+          <div className="text-xs text-gray-500 mt-1">
+            Brush: {brushSize}px • Color: {brushColor}
+          </div>
+        )}
       </div>
     </div>
   );

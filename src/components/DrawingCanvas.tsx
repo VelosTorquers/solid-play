@@ -7,6 +7,8 @@ interface DrawingCanvasProps {
   roomId: string;
   isActive: boolean;
   userName: string;
+  brushSize: number;
+  brushColor: string;
 }
 
 interface Drawing {
@@ -17,7 +19,7 @@ interface Drawing {
   created_by: string;
 }
 
-export function DrawingCanvas({ roomId, isActive, userName }: DrawingCanvasProps) {
+export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColor }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>('');
@@ -36,12 +38,13 @@ export function DrawingCanvas({ roomId, isActive, userName }: DrawingCanvasProps
       if (error) throw error;
       return data as Drawing[];
     },
+    refetchInterval: 500, // Faster updates for real-time feel
   });
 
   // Set up real-time subscription for drawings
   useEffect(() => {
     const drawingsChannel = supabase
-      .channel('drawings-changes')
+      .channel(`drawings-${roomId}`)
       .on(
         'postgres_changes',
         {
@@ -125,11 +128,11 @@ export function DrawingCanvas({ roomId, isActive, userName }: DrawingCanvasProps
 
     setCurrentPath(prev => `${prev} L ${x} ${y}`);
 
-    // Draw current stroke
+    // Draw current stroke with live preview
     const ctx = canvas.getContext('2d');
     if (ctx) {
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = brushColor;
+      ctx.lineWidth = brushSize;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       
@@ -144,9 +147,9 @@ export function DrawingCanvas({ roomId, isActive, userName }: DrawingCanvasProps
         ctx.stroke(existingPath);
       });
       
-      // Draw current path
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 2;
+      // Draw current path with current brush settings
+      ctx.strokeStyle = brushColor;
+      ctx.lineWidth = brushSize;
       ctx.stroke(path);
     }
   };
@@ -156,14 +159,18 @@ export function DrawingCanvas({ roomId, isActive, userName }: DrawingCanvasProps
 
     setIsDrawing(false);
 
-    // Save drawing to database
-    await supabase.from('drawings').insert({
+    // Save drawing to database with current brush settings
+    const { error } = await supabase.from('drawings').insert({
       room_id: roomId,
       path_data: currentPath,
-      color: 'black',
-      stroke_width: 2,
+      color: brushColor,
+      stroke_width: brushSize,
       created_by: userName,
     });
+
+    if (error) {
+      console.error('Error saving drawing:', error);
+    }
 
     setCurrentPath('');
   };
