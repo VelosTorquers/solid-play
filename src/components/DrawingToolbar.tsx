@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Palette, Brush, Square, Circle, ArrowRight, Triangle, Minus } from "lucide-react";
+import { Palette, Brush, Square, Circle, ArrowRight, Triangle, Minus, Eraser } from "lucide-react";
 import { useState } from "react";
 
 interface DrawingToolbarProps {
@@ -41,6 +41,7 @@ export function DrawingToolbar({
 
   const tools = [
     { id: 'pen', icon: Brush, label: 'Free Draw' },
+    { id: 'eraser', icon: Eraser, label: 'Eraser' },
     { id: 'line', icon: Minus, label: 'Line' },
     { id: 'rectangle', icon: Square, label: 'Rectangle' },
     { id: 'circle', icon: Circle, label: 'Circle' },
@@ -73,106 +74,134 @@ export function DrawingToolbar({
           </div>
         </div>
 
-        {/* Brush Size */}
-        <div className="space-y-3">
-          <div className="flex items-center space-x-2">
-            <Brush className="h-4 w-4" />
-            <span className="text-sm font-medium">Size: {brushSize}px</span>
-          </div>
-          <Slider
-            value={[brushSize]}
-            onValueChange={(value) => onBrushSizeChange(value[0])}
-            max={50}
-            min={1}
-            step={1}
-            className="w-full"
-          />
-          <div className="flex justify-between text-xs text-gray-500">
-            <span>1px</span>
-            <span>50px</span>
-          </div>
-        </div>
-
-        {/* Color Picker */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
+        {/* Brush Size - Hide for eraser */}
+        {currentTool !== 'eraser' && (
+          <div className="space-y-3">
             <div className="flex items-center space-x-2">
-              <Palette className="h-4 w-4" />
-              <span className="text-sm font-medium">Color</span>
+              <Brush className="h-4 w-4" />
+              <span className="text-sm font-medium">Size: {brushSize}px</span>
             </div>
-            <div 
-              className="w-8 h-8 rounded-full border-3 border-gray-300 cursor-pointer shadow-sm"
-              style={{ backgroundColor: brushColor }}
-              onClick={() => setShowColorPicker(!showColorPicker)}
+            <Slider
+              value={[brushSize]}
+              onValueChange={(value) => onBrushSizeChange(value[0])}
+              max={50}
+              min={1}
+              step={1}
+              className="w-full"
             />
-          </div>
-
-          {showColorPicker && (
-            <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
-              {/* Color Category Tabs */}
-              <div className="flex flex-wrap gap-1">
-                {Object.keys(colorCategories).map((category) => (
-                  <Button
-                    key={category}
-                    variant={activeColorCategory === category ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setActiveColorCategory(category)}
-                    className="text-xs px-2 py-1 h-7"
-                  >
-                    {category.charAt(0).toUpperCase() + category.slice(1)}
-                  </Button>
-                ))}
-              </div>
-
-              {/* Color Grid */}
-              <div className="grid grid-cols-8 gap-1">
-                {colorCategories[activeColorCategory as keyof typeof colorCategories].map((color) => (
-                  <button
-                    key={color}
-                    className="w-8 h-8 rounded border-2 hover:scale-110 transition-transform shadow-sm"
-                    style={{ 
-                      backgroundColor: color,
-                      borderColor: brushColor === color ? '#333' : '#ddd'
-                    }}
-                    onClick={() => {
-                      onBrushColorChange(color);
-                    }}
-                    title={color}
-                  />
-                ))}
-              </div>
-
-              {/* Custom Color Input */}
-              <div className="flex items-center space-x-2 pt-2 border-t">
-                <span className="text-xs text-gray-600">Custom:</span>
-                <input
-                  type="color"
-                  value={brushColor}
-                  onChange={(e) => onBrushColorChange(e.target.value)}
-                  className="w-8 h-8 rounded border cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={brushColor}
-                  onChange={(e) => onBrushColorChange(e.target.value)}
-                  className="text-xs px-2 py-1 border rounded flex-1 font-mono"
-                  placeholder="#000000"
-                />
-              </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>1px</span>
+              <span>50px</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Brush Preview */}
+        {/* Eraser Size */}
+        {currentTool === 'eraser' && (
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Eraser className="h-4 w-4" />
+              <span className="text-sm font-medium">Eraser Size: {brushSize}px</span>
+            </div>
+            <Slider
+              value={[brushSize]}
+              onValueChange={(value) => onBrushSizeChange(value[0])}
+              max={50}
+              min={5}
+              step={1}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>5px</span>
+              <span>50px</span>
+            </div>
+          </div>
+        )}
+
+        {/* Color Picker - Hide for eraser */}
+        {currentTool !== 'eraser' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Palette className="h-4 w-4" />
+                <span className="text-sm font-medium">Color</span>
+              </div>
+              <div 
+                className="w-8 h-8 rounded-full border-3 border-gray-300 cursor-pointer shadow-sm"
+                style={{ backgroundColor: brushColor }}
+                onClick={() => setShowColorPicker(!showColorPicker)}
+              />
+            </div>
+
+            {showColorPicker && (
+              <div className="space-y-3 p-3 bg-gray-50 rounded-lg">
+                {/* Color Category Tabs */}
+                <div className="flex flex-wrap gap-1">
+                  {Object.keys(colorCategories).map((category) => (
+                    <Button
+                      key={category}
+                      variant={activeColorCategory === category ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setActiveColorCategory(category)}
+                      className="text-xs px-2 py-1 h-7"
+                    >
+                      {category.charAt(0).toUpperCase() + category.slice(1)}
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Color Grid */}
+                <div className="grid grid-cols-8 gap-1">
+                  {colorCategories[activeColorCategory as keyof typeof colorCategories].map((color) => (
+                    <button
+                      key={color}
+                      className="w-8 h-8 rounded border-2 hover:scale-110 transition-transform shadow-sm"
+                      style={{ 
+                        backgroundColor: color,
+                        borderColor: brushColor === color ? '#333' : '#ddd'
+                      }}
+                      onClick={() => {
+                        onBrushColorChange(color);
+                      }}
+                      title={color}
+                    />
+                  ))}
+                </div>
+
+                {/* Custom Color Input */}
+                <div className="flex items-center space-x-2 pt-2 border-t">
+                  <span className="text-xs text-gray-600">Custom:</span>
+                  <input
+                    type="color"
+                    value={brushColor}
+                    onChange={(e) => onBrushColorChange(e.target.value)}
+                    className="w-8 h-8 rounded border cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={brushColor}
+                    onChange={(e) => onBrushColorChange(e.target.value)}
+                    className="text-xs px-2 py-1 border rounded flex-1 font-mono"
+                    placeholder="#000000"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Brush/Eraser Preview */}
         <div className="space-y-2">
           <span className="text-sm font-medium">Preview</span>
           <div className="flex justify-center p-4 bg-gray-50 rounded-lg">
             <div 
-              className="rounded-full shadow-sm"
+              className="rounded-full shadow-sm border-2"
               style={{
                 width: `${Math.max(brushSize, 4)}px`,
                 height: `${Math.max(brushSize, 4)}px`,
-                backgroundColor: brushColor
+                backgroundColor: currentTool === 'eraser' ? '#f3f4f6' : brushColor,
+                borderColor: currentTool === 'eraser' ? '#9ca3af' : brushColor,
+                borderStyle: currentTool === 'eraser' ? 'dashed' : 'solid'
               }}
             />
           </div>

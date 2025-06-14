@@ -1,3 +1,4 @@
+
 import { useRef, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -24,6 +25,7 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
+  const [isErasing, setIsErasing] = useState(false);
   const queryClient = useQueryClient();
 
   // Fetch drawings
@@ -39,7 +41,7 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
       if (error) throw error;
       return data as Drawing[];
     },
-    refetchInterval: 500, // Faster updates for real-time feel
+    refetchInterval: 500,
   });
 
   // Set up real-time subscription for drawings
@@ -156,6 +158,36 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     }
   };
 
+  const handleErase = async (pos: {x: number, y: number}) => {
+    // Find drawings that intersect with eraser
+    const drawingsToDelete: string[] = [];
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    drawings.forEach((drawing) => {
+      const path = new Path2D(drawing.path_data);
+      // Check if the eraser position intersects with the path
+      if (ctx.isPointInStroke && ctx.isPointInStroke(path, pos.x, pos.y)) {
+        drawingsToDelete.push(drawing.id);
+      }
+    });
+
+    // Delete intersecting drawings
+    if (drawingsToDelete.length > 0) {
+      const { error } = await supabase
+        .from('drawings')
+        .delete()
+        .in('id', drawingsToDelete);
+
+      if (error) {
+        console.error('Error erasing drawings:', error);
+      }
+    }
+  };
+
   const startDrawing = (e: React.MouseEvent) => {
     if (!isActive) return;
 
@@ -163,7 +195,10 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     setIsDrawing(true);
     setStartPoint(pos);
 
-    if (drawingTool === 'pen') {
+    if (drawingTool === 'eraser') {
+      setIsErasing(true);
+      handleErase(pos);
+    } else if (drawingTool === 'pen') {
       setCurrentPath(`M ${pos.x} ${pos.y}`);
     }
   };
@@ -178,6 +213,11 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     if (!ctx) return;
 
     const pos = getMousePos(e);
+
+    if (drawingTool === 'eraser') {
+      handleErase(pos);
+      return;
+    }
 
     // Clear canvas and redraw all existing drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -215,7 +255,14 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     if (!isDrawing) return;
 
     setIsDrawing(false);
+    setIsErasing(false);
     
+    if (drawingTool === 'eraser') {
+      setCurrentPath('');
+      setStartPoint(null);
+      return;
+    }
+
     let pathToSave = '';
 
     if (drawingTool === 'pen') {
@@ -243,15 +290,24 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     setStartPoint(null);
   };
 
+  const getCursor = () => {
+    if (!isActive) return 'default';
+    if (drawingTool === 'eraser') return 'crosshair';
+    return 'crosshair';
+  };
+
   return (
     <canvas
       ref={canvasRef}
-      className={`absolute inset-0 w-full h-full ${isActive ? 'cursor-crosshair' : 'pointer-events-none'}`}
+      className={`absolute inset-0 w-full h-full`}
       onMouseDown={startDrawing}
       onMouseMove={draw}
       onMouseUp={stopDrawing}
       onMouseLeave={stopDrawing}
-      style={{ pointerEvents: isActive ? 'auto' : 'none' }}
+      style={{ 
+        pointerEvents: isActive ? 'auto' : 'none',
+        cursor: getCursor()
+      }}
     />
   );
 }

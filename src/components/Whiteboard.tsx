@@ -127,7 +127,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     if (currentTool === 'sticky') {
       const tempNote = {
         id: `temp-${Date.now()}`,
-        content: 'New idea...',
+        content: '',
         x_position: x,
         y_position: y,
         color: 'yellow',
@@ -144,7 +144,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       // Then save to database
       const { error } = await supabase.from('sticky_notes').insert({
         room_id: roomId,
-        content: 'New idea...',
+        content: '',
         x_position: x,
         y_position: y,
         color: 'yellow',
@@ -159,7 +159,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     } else if (currentTool === 'text') {
       const tempText = {
         id: `temp-${Date.now()}`,
-        content: 'Text...',
+        content: '',
         x_position: x,
         y_position: y,
         font_size: 16,
@@ -176,7 +176,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       // Then save to database
       const { error } = await supabase.from('text_elements').insert({
         room_id: roomId,
-        content: 'Text...',
+        content: '',
         x_position: x,
         y_position: y,
         font_size: 16,

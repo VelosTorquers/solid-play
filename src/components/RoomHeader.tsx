@@ -1,8 +1,9 @@
 
 import { Button } from "@/components/ui/button";
-import { Copy, Share2, Download } from "lucide-react";
+import { Copy, Share2, Download, Home } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ExportModal } from "./ExportModal";
 
 interface RoomHeaderProps {
@@ -11,6 +12,7 @@ interface RoomHeaderProps {
 
 export function RoomHeader({ roomId }: RoomHeaderProps) {
   const [showExport, setShowExport] = useState(false);
+  const navigate = useNavigate();
   
   const roomUrl = `${window.location.origin}/room/${roomId}`;
 
@@ -30,12 +32,18 @@ export function RoomHeader({ roomId }: RoomHeaderProps) {
     });
   };
 
+  const goHome = () => {
+    navigate('/');
+  };
+
   return (
     <>
       <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center space-x-4">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-full"></div>
+          <div className="flex items-center space-x-2 cursor-pointer hover:opacity-80 transition-opacity" onClick={goHome}>
+            <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-full flex items-center justify-center">
+              <Home className="h-4 w-4 text-white" />
+            </div>
             <span className="text-xl font-bold text-gray-900">Solid</span>
           </div>
           
