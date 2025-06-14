@@ -6,8 +6,11 @@ import { Card } from "@/components/ui/card"
 import { Spotlight } from "@/components/ui/spotlight"
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
+import { useNavigate } from "react-router-dom"
  
 export function Hero() {
+  const navigate = useNavigate();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 relative overflow-hidden">
       <Card className="w-full h-screen bg-black/[0.96] relative overflow-hidden border-0 rounded-none">
@@ -28,26 +31,28 @@ export function Hero() {
                 Solid
               </h1>
               <h2 className="text-2xl md:text-3xl font-light text-neutral-300 mt-2 mb-6">
-                Virtual Art Gallery Platform
+                Team Collaboration Platform
               </h2>
               <p className="mt-4 text-neutral-300 max-w-lg text-lg leading-relaxed">
-                Create immersive 3D gallery spaces, collaborate with artists worldwide, 
-                and curate stunning virtual exhibitions that bring digital art to life.
+                Streamline team communication, manage tasks efficiently, 
+                and collaborate seamlessly with real-time chat, task management, and Q&A features.
               </p>
               
               <div className="mt-8 flex gap-4 flex-col sm:flex-row">
                 <Button 
                   size="lg" 
                   className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-black font-semibold px-8 py-3"
+                  onClick={() => navigate('/auth')}
                 >
-                  Start Creating
+                  Get Started
                 </Button>
                 <Button 
                   variant="outline" 
                   size="lg"
                   className="border-neutral-600 text-neutral-200 hover:bg-neutral-800 px-8 py-3"
+                  onClick={() => navigate('/dashboard')}
                 >
-                  Explore Galleries
+                  View Dashboard
                 </Button>
               </div>
             </motion.div>
