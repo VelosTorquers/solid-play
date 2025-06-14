@@ -48,7 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .eq('id', session.user.id)
               .single();
             
-            setProfile(profileData);
+            if (profileData) {
+              setProfile({
+                ...profileData,
+                role: profileData.role as 'admin' | 'member'
+              });
+            }
           }, 0);
         } else {
           setProfile(null);
@@ -70,7 +75,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .eq('id', session.user.id)
           .single()
           .then(({ data: profileData }) => {
-            setProfile(profileData);
+            if (profileData) {
+              setProfile({
+                ...profileData,
+                role: profileData.role as 'admin' | 'member'
+              });
+            }
             setLoading(false);
           });
       } else {
