@@ -16,9 +16,9 @@ export function Hero() {
           fill="white"
         />
         
-        <div className="flex h-full">
+        <div className="flex h-full flex-col lg:flex-row">
           {/* Left content */}
-          <div className="flex-1 p-8 lg:p-16 relative z-10 flex flex-col justify-center">
+          <div className="flex-1 p-8 lg:p-16 relative z-10 flex flex-col justify-center min-h-[50vh] lg:min-h-full">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -35,7 +35,7 @@ export function Hero() {
                 and curate stunning virtual exhibitions that bring digital art to life.
               </p>
               
-              <div className="mt-8 flex gap-4">
+              <div className="mt-8 flex gap-4 flex-col sm:flex-row">
                 <Button 
                   size="lg" 
                   className="bg-gradient-to-r from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-black font-semibold px-8 py-3"
@@ -54,7 +54,7 @@ export function Hero() {
           </div>
 
           {/* Right content - 3D Scene */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-h-[400px] lg:min-h-full">
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
