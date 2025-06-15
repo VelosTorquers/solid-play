@@ -24,16 +24,14 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [position, setPosition] = useState({ x: element.x_position, y: element.y_position });
   const [lastTap, setLastTap] = useState(0);
   const [fontSize, setFontSize] = useState(element.font_size);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContent(element.content);
-    setPosition({ x: element.x_position, y: element.y_position });
     setFontSize(element.font_size);
-  }, [element.content, element.x_position, element.y_position, element.font_size]);
+  }, [element.content, element.font_size]);
 
   const handleContentSave = useCallback(async () => {
     if (content.trim() !== element.content || fontSize !== element.font_size) {
@@ -62,33 +60,33 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
     e.preventDefault();
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX,
+      y: e.clientY,
     });
-  }, [isSelectable, isEditing, position]);
+  }, [isSelectable, isEditing]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
-    const newX = Math.max(0, e.clientX - dragStart.x);
-    const newY = Math.max(0, e.clientY - dragStart.y);
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
     
-    setPosition({ x: newX, y: newY });
-  }, [isDragging, dragStart]);
-
-  const handleMouseUp = useCallback(async () => {
-    if (!isDragging) return;
-    
-    setIsDragging(false);
-    
-    await supabase
+    // Update position in database immediately for real-time collaboration
+    supabase
       .from('text_elements')
       .update({ 
-        x_position: position.x, 
-        y_position: position.y 
+        x_position: element.x_position + deltaX, 
+        y_position: element.y_position + deltaY 
       })
       .eq('id', element.id);
-  }, [isDragging, position, element.id]);
+      
+    setDragStart({ x: e.clientX, y: e.clientY });
+  }, [isDragging, dragStart, element.x_position, element.y_position, element.id]);
+
+  const handleMouseUp = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+  }, [isDragging]);
 
   useEffect(() => {
     if (isDragging) {
@@ -108,7 +106,6 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
     const timeSinceLastTap = now - lastTap;
     
     if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-      // Double tap detected
       if (!isDragging) {
         setIsEditing(true);
       }
@@ -126,7 +123,6 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
       setFontSize(element.font_size);
       setIsEditing(false);
     }
-    // Allow all key presses including space
   };
 
   const increaseFontSize = () => {
@@ -141,10 +137,9 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
 
   return (
     <div
-      className={`absolute group transition-all duration-200 ${
+      className={`group transition-all duration-200 ${
         isSelectable ? 'cursor-move' : 'cursor-text'
       } ${isDragging ? 'opacity-75 z-50' : 'hover:scale-105'}`}
-      style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
     >
@@ -198,7 +193,6 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
         </div>
       )}
 
-      {/* Delete button */}
       <Button
         variant="ghost"
         size="sm"

@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StickyNote } from "./StickyNote";
@@ -58,7 +57,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     maxY: 5000 
   });
 
-  // Optimized fetch with shorter refetch interval for real-time feel
+  // Queries and subscriptions
   const { data: stickyNotes = [] } = useQuery({
     queryKey: ['sticky-notes', roomId],
     queryFn: async () => {
@@ -143,7 +142,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     setCanvasBounds({ minX, minY, maxX, maxY });
   }, [stickyNotes, textElements]);
 
-  // Improved zoom controls
+  // Zoom controls
   const zoomIn = useCallback(() => {
     setScale(prev => Math.min(prev * 1.2, 3));
   }, []);
@@ -157,7 +156,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     setPanOffset({ x: 0, y: 0 });
   }, []);
 
-  // Handle wheel zoom with better sensitivity
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -167,7 +165,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     }
   }, [scale]);
 
-  // Handle pan with space key for easier laptop use
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.code === 'Space' && !isPanning && currentTool === 'select') {
       e.preventDefault();
@@ -192,9 +189,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Handle pan start - only allow panning when not interacting with elements
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Don't pan if clicking on interactive elements or in select mode
     const target = e.target as HTMLElement;
     const isInteractiveElement = target.closest('[data-interactive="true"]');
     
@@ -208,7 +203,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     }
   }, [currentTool]);
 
-  // Handle pan move
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isPanning) {
       const deltaX = e.clientX - lastPanPoint.x;
@@ -223,7 +217,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     }
   }, [isPanning, lastPanPoint]);
 
-  // Handle pan end
   const handleMouseUp = useCallback(() => {
     if (isPanning) {
       setIsPanning(false);
@@ -231,7 +224,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     }
   }, [isPanning]);
 
-  // Fixed cursor position calculation for infinite canvas
+  // Fixed coordinate conversion for infinite canvas
   const getCanvasPosition = useCallback((e: React.MouseEvent) => {
     const rect = whiteboardRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -239,11 +232,11 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    // Convert screen coordinates to canvas coordinates
-    const canvasX = (clientX - panOffset.x) / scale;
-    const canvasY = (clientY - panOffset.y) / scale;
+    // Convert screen coordinates to world coordinates
+    const worldX = (clientX - panOffset.x) / scale;
+    const worldY = (clientY - panOffset.y) / scale;
 
-    return { x: canvasX, y: canvasY };
+    return { x: worldX, y: worldY };
   }, [scale, panOffset]);
 
   const handleWhiteboardClick = useCallback(async (e: React.MouseEvent) => {
@@ -256,6 +249,8 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
     const { x, y } = getCanvasPosition(e);
 
+    console.log('Creating element at:', { x, y, tool: currentTool });
+
     // Expand canvas bounds if needed
     const expandedBounds = {
       minX: Math.min(canvasBounds.minX, x - 1000),
@@ -266,21 +261,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     setCanvasBounds(expandedBounds);
 
     if (currentTool === 'sticky') {
-      const tempNote = {
-        id: `temp-${Date.now()}`,
-        content: '',
-        x_position: x,
-        y_position: y,
-        color: 'yellow',
-        votes: 0,
-        created_by: userName,
-      };
-
-      queryClient.setQueryData(['sticky-notes', roomId], (old: StickyNoteType[] = []) => [
-        ...old,
-        tempNote as StickyNoteType
-      ]);
-
       const { error } = await supabase.from('sticky_notes').insert({
         room_id: roomId,
         content: '',
@@ -291,25 +271,9 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       });
 
       if (error) {
-        queryClient.invalidateQueries({ queryKey: ['sticky-notes', roomId] });
         console.error('Error creating sticky note:', error);
       }
     } else if (currentTool === 'text') {
-      const tempText = {
-        id: `temp-${Date.now()}`,
-        content: '',
-        x_position: x,
-        y_position: y,
-        font_size: 16,
-        color: 'black',
-        created_by: userName,
-      };
-
-      queryClient.setQueryData(['text-elements', roomId], (old: TextElementType[] = []) => [
-        ...old,
-        tempText as TextElementType
-      ]);
-
       const { error } = await supabase.from('text_elements').insert({
         room_id: roomId,
         content: '',
@@ -321,7 +285,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       });
 
       if (error) {
-        queryClient.invalidateQueries({ queryKey: ['text-elements', roomId] });
         console.error('Error creating text element:', error);
       }
     }
@@ -370,8 +333,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           width: `${canvasWidth}px`,
           height: `${canvasHeight}px`,
           position: 'absolute',
-          top: `${canvasBounds.minY}px`,
-          left: `${canvasBounds.minX}px`,
         }}
       >
         {/* Drawing Canvas */}
@@ -383,11 +344,21 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           brushColor={brushColor}
           drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
           canvasBounds={canvasBounds}
+          scale={scale}
+          panOffset={panOffset}
         />
 
         {/* Sticky Notes */}
         {stickyNotes.map((note) => (
-          <div key={note.id} data-interactive="true">
+          <div 
+            key={note.id} 
+            data-interactive="true"
+            style={{
+              position: 'absolute',
+              left: note.x_position,
+              top: note.y_position,
+            }}
+          >
             <StickyNote
               note={note}
               roomId={roomId}
@@ -398,7 +369,15 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
         {/* Text Elements */}
         {textElements.map((element) => (
-          <div key={element.id} data-interactive="true">
+          <div 
+            key={element.id} 
+            data-interactive="true"
+            style={{
+              position: 'absolute',
+              left: element.x_position,
+              top: element.y_position,
+            }}
+          >
             <TextElement
               element={element}
               roomId={roomId}

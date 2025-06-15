@@ -15,6 +15,8 @@ interface DrawingCanvasProps {
     maxX: number;
     maxY: number;
   };
+  scale: number;
+  panOffset: { x: number; y: number };
 }
 
 interface Drawing {
@@ -32,7 +34,9 @@ export function DrawingCanvas({
   brushSize, 
   brushColor, 
   drawingTool,
-  canvasBounds 
+  canvasBounds,
+  scale,
+  panOffset
 }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -42,7 +46,6 @@ export function DrawingCanvas({
   const [mousePos, setMousePos] = useState<{x: number, y: number}>({x: 0, y: 0});
   const queryClient = useQueryClient();
 
-  // Fetch drawings
   const { data: drawings = [] } = useQuery({
     queryKey: ['drawings', roomId],
     queryFn: async () => {
@@ -58,7 +61,6 @@ export function DrawingCanvas({
     refetchInterval: 500,
   });
 
-  // Set up real-time subscription for drawings
   useEffect(() => {
     const drawingsChannel = supabase
       .channel(`drawings-${roomId}`)
@@ -101,13 +103,10 @@ export function DrawingCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw all paths, adjusting for canvas bounds
     drawings.forEach((drawing) => {
       try {
-        // Parse the path data and adjust coordinates relative to canvas bounds
         const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
           const num = parseFloat(match);
           return (num - canvasBounds.minX).toString();
@@ -125,22 +124,32 @@ export function DrawingCanvas({
     });
   }, [drawings, canvasBounds]);
 
+  // Fixed mouse position calculation that accounts for canvas transform
   const getMousePos = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
-    const relativeY = e.clientY - rect.top;
     
-    // Convert to absolute canvas coordinates
-    const absoluteX = relativeX + canvasBounds.minX;
-    const absoluteY = relativeY + canvasBounds.minY;
+    // Get the mouse position relative to the viewport
+    const clientX = e.clientX;
+    const clientY = e.clientY;
     
-    return { x: absoluteX, y: absoluteY };
+    // Convert to world coordinates accounting for pan and zoom
+    const worldX = (clientX - rect.left - panOffset.x) / scale;
+    const worldY = (clientY - rect.top - panOffset.y) / scale;
+    
+    console.log('Mouse position calculation:', {
+      client: { x: clientX, y: clientY },
+      rect: { left: rect.left, top: rect.top },
+      panOffset,
+      scale,
+      world: { x: worldX, y: worldY }
+    });
+    
+    return { x: worldX, y: worldY };
   };
 
-  // Track mouse position for eraser cursor
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (rect) {
@@ -165,7 +174,6 @@ export function DrawingCanvas({
       return;
     }
 
-    // Clear canvas and redraw all existing drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawings.forEach((drawing) => {
@@ -186,7 +194,6 @@ export function DrawingCanvas({
       }
     });
 
-    // Draw current path/shape
     ctx.strokeStyle = brushColor;
     ctx.lineWidth = brushSize;
     ctx.lineCap = 'round';
@@ -194,7 +201,6 @@ export function DrawingCanvas({
 
     if (drawingTool === 'pen') {
       setCurrentPath(prev => `${prev} L ${pos.x} ${pos.y}`);
-      // Convert to relative coordinates for display
       const displayPath = currentPath.replace(/(\d+\.?\d*)/g, (match) => {
         const num = parseFloat(match);
         return (num - canvasBounds.minX).toString();
@@ -203,10 +209,8 @@ export function DrawingCanvas({
       const path = new Path2D(displayPath);
       ctx.stroke(path);
     } else if (startPoint) {
-      // For shapes, create preview
       const shapePath = createShapePath(drawingTool, startPoint, pos);
       if (shapePath) {
-        // Convert to relative coordinates for display
         const displayPath = shapePath.replace(/(\d+\.?\d*)/g, (match) => {
           const num = parseFloat(match);
           return (num - canvasBounds.minX).toString();
@@ -261,7 +265,6 @@ export function DrawingCanvas({
   };
 
   const handleErase = async (pos: {x: number, y: number}) => {
-    // Find drawings that intersect with eraser
     const drawingsToDelete: string[] = [];
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -269,20 +272,18 @@ export function DrawingCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Convert absolute position to relative canvas position
     const relativeX = pos.x - canvasBounds.minX;
     const relativeY = pos.y - canvasBounds.minY;
 
     drawings.forEach((drawing) => {
       try {
-        // Adjust path data for relative coordinates
         const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
           const num = parseFloat(match);
           return (num - canvasBounds.minX).toString();
         });
         
         const path = new Path2D(adjustedPathData);
-        ctx.lineWidth = drawing.stroke_width + 10; // Increase hit area for eraser
+        ctx.lineWidth = drawing.stroke_width + 10;
         
         if (ctx.isPointInStroke && ctx.isPointInStroke(path, relativeX, relativeY)) {
           drawingsToDelete.push(drawing.id);
@@ -292,7 +293,6 @@ export function DrawingCanvas({
       }
     });
 
-    // Delete intersecting drawings
     if (drawingsToDelete.length > 0) {
       const { error } = await supabase
         .from('drawings')
@@ -311,6 +311,8 @@ export function DrawingCanvas({
     const pos = getMousePos(e);
     setIsDrawing(true);
     setStartPoint(pos);
+
+    console.log('Starting to draw at:', pos);
 
     if (drawingTool === 'eraser') {
       setIsErasing(true);
@@ -342,6 +344,8 @@ export function DrawingCanvas({
     }
 
     if (pathToSave) {
+      console.log('Saving drawing with path:', pathToSave);
+      
       const { error } = await supabase.from('drawings').insert({
         room_id: roomId,
         path_data: pathToSave,
@@ -361,15 +365,15 @@ export function DrawingCanvas({
 
   const getCursor = () => {
     if (!isActive) return 'default';
-    if (drawingTool === 'eraser') return 'none'; // Hide default cursor for custom eraser
+    if (drawingTool === 'eraser') return 'none';
     return 'crosshair';
   };
 
   return (
-    <div className="relative w-full h-full">
+    <div className="absolute inset-0 w-full h-full">
       <canvas
         ref={canvasRef}
-        className={`absolute inset-0 w-full h-full`}
+        className="absolute inset-0 w-full h-full"
         onMouseDown={startDrawing}
         onMouseMove={handleMouseMove}
         onMouseUp={stopDrawing}
@@ -380,7 +384,6 @@ export function DrawingCanvas({
         }}
       />
       
-      {/* Custom eraser cursor */}
       {isActive && drawingTool === 'eraser' && (
         <div
           className="pointer-events-none absolute rounded-full border-2 border-red-500 bg-red-100/50 z-10"

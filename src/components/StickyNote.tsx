@@ -1,4 +1,3 @@
-
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Heart, X } from "lucide-react";
@@ -32,14 +31,12 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [position, setPosition] = useState({ x: note.x_position, y: note.y_position });
   const [lastTap, setLastTap] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContent(note.content);
-    setPosition({ x: note.x_position, y: note.y_position });
-  }, [note.content, note.x_position, note.y_position]);
+  }, [note.content]);
 
   const handleContentSave = useCallback(async () => {
     if (content.trim() !== note.content) {
@@ -80,33 +77,33 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
     e.preventDefault();
     setIsDragging(true);
     setDragStart({
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
+      x: e.clientX,
+      y: e.clientY,
     });
-  }, [isSelectable, isEditing, position]);
+  }, [isSelectable, isEditing]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
-    const newX = Math.max(0, e.clientX - dragStart.x);
-    const newY = Math.max(0, e.clientY - dragStart.y);
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
     
-    setPosition({ x: newX, y: newY });
-  }, [isDragging, dragStart]);
-
-  const handleMouseUp = useCallback(async () => {
-    if (!isDragging) return;
-    
-    setIsDragging(false);
-    
-    await supabase
+    // Update position in database immediately for real-time collaboration
+    supabase
       .from('sticky_notes')
       .update({ 
-        x_position: position.x, 
-        y_position: position.y 
+        x_position: note.x_position + deltaX, 
+        y_position: note.y_position + deltaY 
       })
       .eq('id', note.id);
-  }, [isDragging, position, note.id]);
+      
+    setDragStart({ x: e.clientX, y: e.clientY });
+  }, [isDragging, dragStart, note.x_position, note.y_position, note.id]);
+
+  const handleMouseUp = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+  }, [isDragging]);
 
   useEffect(() => {
     if (isDragging) {
@@ -126,7 +123,6 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
     const timeSinceLastTap = now - lastTap;
     
     if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-      // Double tap detected
       if (!isDragging) {
         setIsEditing(true);
       }
@@ -143,21 +139,18 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
       setContent(note.content);
       setIsEditing(false);
     }
-    // Allow all key presses including space
   };
 
   return (
     <div
-      className={`absolute w-48 min-h-32 p-3 border-2 rounded-lg shadow-lg transition-all duration-200 group ${
+      className={`w-48 min-h-32 p-3 border-2 rounded-lg shadow-lg transition-all duration-200 group ${
         colorClasses[note.color as keyof typeof colorClasses] || colorClasses.yellow
       } ${isSelectable ? 'cursor-move hover:shadow-xl' : 'cursor-pointer hover:shadow-md'} ${
         isDragging ? 'opacity-75 scale-105 z-50' : 'hover:scale-102'
       }`}
-      style={{ left: position.x, top: position.y }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
     >
-      {/* Color palette */}
       <div className="flex space-x-1 mb-2 opacity-0 group-hover:opacity-100 transition-opacity">
         {Object.keys(colorClasses).map((color) => (
           <button
@@ -173,7 +166,6 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
         ))}
       </div>
 
-      {/* Content */}
       {isEditing ? (
         <Textarea
           ref={textareaRef}
@@ -191,7 +183,6 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
         </div>
       )}
 
-      {/* Actions */}
       <div className="flex justify-between items-center mt-2">
         <div className="flex items-center space-x-2">
           <Button
