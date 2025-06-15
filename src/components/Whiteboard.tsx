@@ -198,7 +198,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     const target = e.target as HTMLElement;
     const isInteractiveElement = target.closest('[data-interactive="true"]');
     
-    if (((currentTool === 'select' && e.code === 'Space') || e.button === 1) && 
+    if ((currentTool === 'select' || e.button === 1) && 
         e.button !== 2 && 
         !isInteractiveElement) {
       e.preventDefault();
