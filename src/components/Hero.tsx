@@ -109,7 +109,7 @@ export function Hero() {
             className="mt-12 text-gray-400"
           >
             <p>Sessions auto-expire in 24 hours • Complete privacy • No data stored</p>
-          </div>
+          </motion.div>
         </motion.div>
       </div>
     </section>
