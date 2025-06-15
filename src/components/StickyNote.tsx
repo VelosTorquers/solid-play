@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Heart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface StickyNoteProps {
   note: {
@@ -134,6 +135,17 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
     setLastTap(now);
   }, [isDragging, lastTap]);
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      handleContentSave();
+    }
+    if (e.key === 'Escape') {
+      setContent(note.content);
+      setIsEditing(false);
+    }
+    // Allow all key presses including space
+  };
+
   return (
     <div
       className={`absolute w-48 min-h-32 p-3 border-2 rounded-lg shadow-lg transition-all duration-200 group ${
@@ -163,20 +175,12 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
 
       {/* Content */}
       {isEditing ? (
-        <textarea
+        <Textarea
           ref={textareaRef}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onBlur={handleContentSave}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && e.ctrlKey) {
-              handleContentSave();
-            }
-            if (e.key === 'Escape') {
-              setContent(note.content);
-              setIsEditing(false);
-            }
-          }}
+          onKeyDown={handleKeyDown}
           className="w-full h-20 bg-transparent border-none outline-none resize-none text-sm placeholder:text-gray-500"
           autoFocus
           placeholder="Enter your idea..."

@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Plus, Layers3, LogOut, Edit, Trash2, Share2 } from "lucide-react";
+import { Plus, Layers3, LogOut, Edit, Trash2, Share2, Users } from "lucide-react";
 
 interface SavedWhiteboard {
   id: string;
@@ -25,7 +25,9 @@ export default function Dashboard() {
   const [whiteboards, setWhiteboards] = useState<SavedWhiteboard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [newRoomTitle, setNewRoomTitle] = useState("");
+  const [joinRoomCode, setJoinRoomCode] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isJoining, setIsJoining] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -47,10 +49,10 @@ export default function Dashboard() {
       if (error) throw error;
       setWhiteboards(data || []);
     } catch (error) {
-      console.error('Error fetching whiteboards:', error);
+      console.error('Error fetching rooms:', error);
       toast({
         title: "Error",
-        description: "Failed to load whiteboards",
+        description: "Failed to load rooms",
         variant: "destructive"
       });
     } finally {
@@ -71,7 +73,7 @@ export default function Dashboard() {
     if (!newRoomTitle.trim()) {
       toast({
         title: "Title required",
-        description: "Please enter a title for your whiteboard",
+        description: "Please enter a title for your room",
         variant: "destructive"
       });
       return;
@@ -100,21 +102,96 @@ export default function Dashboard() {
       if (whiteboardError) throw whiteboardError;
       
       toast({
-        title: "Whiteboard created!",
-        description: "Your new whiteboard is ready",
+        title: "Room created!",
+        description: "Your new room is ready",
       });
       
       navigate(`/room/${roomCode}`);
     } catch (error) {
-      console.error('Error creating whiteboard:', error);
+      console.error('Error creating room:', error);
       toast({
         title: "Error",
-        description: "Failed to create whiteboard",
+        description: "Failed to create room",
         variant: "destructive"
       });
     } finally {
       setIsCreating(false);
       setNewRoomTitle("");
+    }
+  };
+
+  const joinRoom = async () => {
+    if (!joinRoomCode.trim()) {
+      toast({
+        title: "Room code required",
+        description: "Please enter a room code",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsJoining(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('rooms')
+        .select('id, expires_at')
+        .eq('id', joinRoomCode.toUpperCase())
+        .eq('is_active', true)
+        .single();
+
+      if (error || !data) {
+        toast({
+          title: "Room not found",
+          description: "This room doesn't exist or has expired.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (new Date(data.expires_at) < new Date()) {
+        toast({
+          title: "Room expired",
+          description: "This room has expired.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      navigate(`/room/${joinRoomCode.toUpperCase()}`);
+    } catch (error) {
+      console.error('Error joining room:', error);
+      toast({
+        title: "Error",
+        description: "Failed to join room",
+        variant: "destructive"
+      });
+    } finally {
+      setIsJoining(false);
+      setJoinRoomCode("");
+    }
+  };
+
+  const createTemporaryRoom = async () => {
+    const username = localStorage.getItem('solid_username') || user?.email?.split('@')[0] || 'User';
+    const roomCode = generateRoomCode();
+    
+    try {
+      const { error } = await supabase
+        .from('rooms')
+        .insert({ id: roomCode });
+      
+      if (error) throw error;
+      
+      localStorage.setItem('solid_username', username);
+      navigate(`/room/${roomCode}`);
+    } catch (error) {
+      console.error('Error creating temporary room:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create temporary room",
+        variant: "destructive"
+      });
     }
   };
 
@@ -135,16 +212,16 @@ export default function Dashboard() {
         .eq('id', roomId);
 
       toast({
-        title: "Whiteboard deleted",
-        description: "Your whiteboard has been removed",
+        title: "Room deleted",
+        description: "Your room has been removed",
       });
       
       fetchWhiteboards();
     } catch (error) {
-      console.error('Error deleting whiteboard:', error);
+      console.error('Error deleting room:', error);
       toast({
         title: "Error",
-        description: "Failed to delete whiteboard",
+        description: "Failed to delete room",
         variant: "destructive"
       });
     }
@@ -186,74 +263,124 @@ export default function Dashboard() {
       <main className="container mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">My Whiteboards</h1>
-            <p className="text-gray-600">Create and manage your collaborative whiteboards</p>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">My Rooms</h1>
+            <p className="text-gray-600">Create and manage your collaborative rooms</p>
           </div>
           
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button className="bg-amber-500 hover:bg-amber-600 text-black">
-                <Plus className="h-4 w-4 mr-2" />
-                New Whiteboard
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create New Whiteboard</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <Input
-                  placeholder="Whiteboard title"
-                  value={newRoomTitle}
-                  onChange={(e) => setNewRoomTitle(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && createNewWhiteboard()}
-                />
-                <Button 
-                  onClick={createNewWhiteboard} 
-                  disabled={isCreating || !newRoomTitle.trim()}
-                  className="w-full"
-                >
-                  {isCreating ? "Creating..." : "Create Whiteboard"}
+          <div className="flex space-x-2">
+            <Button
+              onClick={createTemporaryRoom}
+              variant="outline"
+              className="hover:bg-gray-50"
+            >
+              <Users className="h-4 w-4 mr-2" />
+              Temporary Room
+            </Button>
+            
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="hover:bg-gray-50">
+                  <Users className="h-4 w-4 mr-2" />
+                  Join Room
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Join Room</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Enter room code"
+                    value={joinRoomCode}
+                    onChange={(e) => setJoinRoomCode(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && joinRoom()}
+                    className="uppercase"
+                  />
+                  <Button 
+                    onClick={joinRoom} 
+                    disabled={isJoining || !joinRoomCode.trim()}
+                    className="w-full"
+                  >
+                    {isJoining ? "Joining..." : "Join Room"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button className="bg-amber-500 hover:bg-amber-600 text-black">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Room
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Room</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Room title"
+                    value={newRoomTitle}
+                    onChange={(e) => setNewRoomTitle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && createNewWhiteboard()}
+                  />
+                  <Button 
+                    onClick={createNewWhiteboard} 
+                    disabled={isCreating || !newRoomTitle.trim()}
+                    className="w-full"
+                  >
+                    {isCreating ? "Creating..." : "Create Room"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {whiteboards.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
               <Layers3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No whiteboards yet</h3>
-              <p className="text-gray-600 mb-6">Create your first whiteboard to get started</p>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button className="bg-amber-500 hover:bg-amber-600 text-black">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Whiteboard
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Whiteboard</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <Input
-                      placeholder="Whiteboard title"
-                      value={newRoomTitle}
-                      onChange={(e) => setNewRoomTitle(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && createNewWhiteboard()}
-                    />
-                    <Button 
-                      onClick={createNewWhiteboard} 
-                      disabled={isCreating || !newRoomTitle.trim()}
-                      className="w-full"
-                    >
-                      {isCreating ? "Creating..." : "Create Whiteboard"}
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No saved rooms yet</h3>
+              <p className="text-gray-600 mb-6">Create your first room to get started</p>
+              <div className="flex justify-center space-x-4">
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button className="bg-amber-500 hover:bg-amber-600 text-black">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Room
                     </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create New Room</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <Input
+                        placeholder="Room title"
+                        value={newRoomTitle}
+                        onChange={(e) => setNewRoomTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && createNewWhiteboard()}
+                      />
+                      <Button 
+                        onClick={createNewWhiteboard} 
+                        disabled={isCreating || !newRoomTitle.trim()}
+                        className="w-full"
+                      >
+                        {isCreating ? "Creating..." : "Create Room"}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+                <Button 
+                  onClick={createTemporaryRoom}
+                  variant="outline"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Temporary Room
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ) : (

@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StickyNote } from "./StickyNote";
@@ -140,7 +141,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      const delta = e.deltaY * -0.005; // Reduced sensitivity for smoother zoom
+      const delta = e.deltaY * -0.002; // Reduced sensitivity for smoother zoom
       const newScale = Math.min(Math.max(0.1, scale + delta), 3);
       setScale(newScale);
     }
@@ -220,7 +221,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   }, [scale, panOffset]);
 
   const handleWhiteboardClick = useCallback(async (e: React.MouseEvent) => {
-    if (currentTool === 'select' || currentTool === 'pen' || isPanning) return;
+    if (currentTool === 'select' || currentTool === 'pen' || currentTool === 'eraser' || isPanning) return;
 
     const { x, y } = getCanvasPosition(e);
 
@@ -391,10 +392,10 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
       {/* Drawing Toolbar */}
       <DrawingToolbar
-        isVisible={currentTool === 'pen'}
+        isVisible={currentTool === 'pen' || currentTool === 'eraser'}
         brushSize={brushSize}
         brushColor={brushColor}
-        currentTool={drawingTool}
+        currentTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
         onBrushSizeChange={setBrushSize}
         onBrushColorChange={setBrushColor}
         onToolChange={setDrawingTool}

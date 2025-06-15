@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface TextElementProps {
   element: {
@@ -25,22 +26,27 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: element.x_position, y: element.y_position });
   const [lastTap, setLastTap] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [fontSize, setFontSize] = useState(element.font_size);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContent(element.content);
     setPosition({ x: element.x_position, y: element.y_position });
-  }, [element.content, element.x_position, element.y_position]);
+    setFontSize(element.font_size);
+  }, [element.content, element.x_position, element.y_position, element.font_size]);
 
   const handleContentSave = useCallback(async () => {
-    if (content.trim() !== element.content) {
+    if (content.trim() !== element.content || fontSize !== element.font_size) {
       await supabase
         .from('text_elements')
-        .update({ content: content.trim() })
+        .update({ 
+          content: content.trim(),
+          font_size: fontSize
+        })
         .eq('id', element.id);
     }
     setIsEditing(false);
-  }, [content, element.content, element.id]);
+  }, [content, fontSize, element.content, element.font_size, element.id]);
 
   const handleDelete = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -111,6 +117,28 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
     setLastTap(now);
   }, [isDragging, lastTap]);
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && e.ctrlKey) {
+      handleContentSave();
+    }
+    if (e.key === 'Escape') {
+      setContent(element.content);
+      setFontSize(element.font_size);
+      setIsEditing(false);
+    }
+    // Allow all key presses including space
+  };
+
+  const increaseFontSize = () => {
+    const newSize = Math.min(fontSize + 2, 72);
+    setFontSize(newSize);
+  };
+
+  const decreaseFontSize = () => {
+    const newSize = Math.max(fontSize - 2, 8);
+    setFontSize(newSize);
+  };
+
   return (
     <div
       className={`absolute group transition-all duration-200 ${
@@ -121,34 +149,48 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
       onClick={handleClick}
     >
       {isEditing ? (
-        <input
-          ref={inputRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onBlur={handleContentSave}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleContentSave();
-            }
-            if (e.key === 'Escape') {
-              setContent(element.content);
-              setIsEditing(false);
-            }
-          }}
-          className="bg-white border-2 border-blue-400 outline-none min-w-24 px-3 py-2 rounded-md shadow-lg"
-          style={{ 
-            fontSize: `${element.font_size}px`, 
-            color: element.color,
-            minWidth: '120px'
-          }}
-          autoFocus
-          placeholder="Enter text..."
-        />
+        <div className="relative">
+          <Textarea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onBlur={handleContentSave}
+            onKeyDown={handleKeyDown}
+            className="bg-white border-2 border-blue-400 outline-none resize-both min-w-32 min-h-16 px-3 py-2 rounded-md shadow-lg"
+            style={{ 
+              fontSize: `${fontSize}px`, 
+              color: element.color,
+              minWidth: '150px',
+              minHeight: '60px'
+            }}
+            autoFocus
+            placeholder="Enter text..."
+          />
+          <div className="absolute -top-8 left-0 flex space-x-1 bg-white rounded-md shadow-md p-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={decreaseFontSize}
+              className="h-6 w-6 p-0"
+            >
+              -
+            </Button>
+            <span className="text-xs px-2 py-1">{fontSize}px</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={increaseFontSize}
+              className="h-6 w-6 p-0"
+            >
+              +
+            </Button>
+          </div>
+        </div>
       ) : (
         <div
-          className="whitespace-nowrap px-3 py-2 rounded-md bg-white border-2 border-gray-200 shadow-md hover:shadow-lg transition-all duration-200 min-w-24"
+          className="whitespace-pre-wrap px-3 py-2 rounded-md bg-white border-2 border-gray-200 shadow-md hover:shadow-lg transition-all duration-200 min-w-24 min-h-8"
           style={{ 
-            fontSize: `${element.font_size}px`, 
+            fontSize: `${fontSize}px`, 
             color: element.color 
           }}
         >
