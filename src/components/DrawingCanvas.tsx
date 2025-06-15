@@ -1,4 +1,3 @@
-
 import { useRef, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +9,12 @@ interface DrawingCanvasProps {
   brushSize: number;
   brushColor: string;
   drawingTool: string;
+  canvasBounds: {
+    minX: number;
+    minY: number;
+    maxX: number;
+    maxY: number;
+  };
 }
 
 interface Drawing {
@@ -20,7 +25,15 @@ interface Drawing {
   created_by: string;
 }
 
-export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColor, drawingTool }: DrawingCanvasProps) {
+export function DrawingCanvas({ 
+  roomId, 
+  isActive, 
+  userName, 
+  brushSize, 
+  brushColor, 
+  drawingTool,
+  canvasBounds 
+}: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>('');
@@ -67,6 +80,18 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     };
   }, [roomId, queryClient]);
 
+  // Resize canvas to match bounds
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const width = canvasBounds.maxX - canvasBounds.minX;
+    const height = canvasBounds.maxY - canvasBounds.minY;
+    
+    canvas.width = width;
+    canvas.height = height;
+  }, [canvasBounds]);
+
   // Redraw canvas when drawings change
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -78,42 +103,40 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw all paths
+    // Draw all paths, adjusting for canvas bounds
     drawings.forEach((drawing) => {
-      const path = new Path2D(drawing.path_data);
-      ctx.strokeStyle = drawing.color;
-      ctx.lineWidth = drawing.stroke_width;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke(path);
+      try {
+        // Parse the path data and adjust coordinates relative to canvas bounds
+        const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
+          const num = parseFloat(match);
+          return (num - canvasBounds.minX).toString();
+        });
+        
+        const path = new Path2D(adjustedPathData);
+        ctx.strokeStyle = drawing.color;
+        ctx.lineWidth = drawing.stroke_width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke(path);
+      } catch (error) {
+        console.error('Error drawing path:', error);
+      }
     });
-  }, [drawings]);
-
-  // Resize canvas to fill container
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const resizeCanvas = () => {
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-    };
-
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-    return () => window.removeEventListener('resize', resizeCanvas);
-  }, []);
+  }, [drawings, canvasBounds]);
 
   const getMousePos = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
+    const relativeX = e.clientX - rect.left;
+    const relativeY = e.clientY - rect.top;
+    
+    // Convert to absolute canvas coordinates
+    const absoluteX = relativeX + canvasBounds.minX;
+    const absoluteY = relativeY + canvasBounds.minY;
+    
+    return { x: absoluteX, y: absoluteY };
   };
 
   const createShapePath = (tool: string, start: {x: number, y: number}, end: {x: number, y: number}) => {
@@ -167,11 +190,26 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Convert absolute position to relative canvas position
+    const relativeX = pos.x - canvasBounds.minX;
+    const relativeY = pos.y - canvasBounds.minY;
+
     drawings.forEach((drawing) => {
-      const path = new Path2D(drawing.path_data);
-      // Check if the eraser position intersects with the path
-      if (ctx.isPointInStroke && ctx.isPointInStroke(path, pos.x, pos.y)) {
-        drawingsToDelete.push(drawing.id);
+      try {
+        // Adjust path data for relative coordinates
+        const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
+          const num = parseFloat(match);
+          return (num - canvasBounds.minX).toString();
+        });
+        
+        const path = new Path2D(adjustedPathData);
+        ctx.lineWidth = drawing.stroke_width + 10; // Increase hit area for eraser
+        
+        if (ctx.isPointInStroke && ctx.isPointInStroke(path, relativeX, relativeY)) {
+          drawingsToDelete.push(drawing.id);
+        }
+      } catch (error) {
+        console.error('Error checking path for erasing:', error);
       }
     });
 
@@ -223,12 +261,21 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawings.forEach((drawing) => {
-      const existingPath = new Path2D(drawing.path_data);
-      ctx.strokeStyle = drawing.color;
-      ctx.lineWidth = drawing.stroke_width;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke(existingPath);
+      try {
+        const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
+          const num = parseFloat(match);
+          return (num - canvasBounds.minX).toString();
+        });
+        
+        const existingPath = new Path2D(adjustedPathData);
+        ctx.strokeStyle = drawing.color;
+        ctx.lineWidth = drawing.stroke_width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke(existingPath);
+      } catch (error) {
+        console.error('Error redrawing existing path:', error);
+      }
     });
 
     // Draw current path/shape
@@ -239,13 +286,25 @@ export function DrawingCanvas({ roomId, isActive, userName, brushSize, brushColo
 
     if (drawingTool === 'pen') {
       setCurrentPath(prev => `${prev} L ${pos.x} ${pos.y}`);
-      const path = new Path2D(currentPath + ` L ${pos.x} ${pos.y}`);
+      // Convert to relative coordinates for display
+      const displayPath = currentPath.replace(/(\d+\.?\d*)/g, (match) => {
+        const num = parseFloat(match);
+        return (num - canvasBounds.minX).toString();
+      }) + ` L ${pos.x - canvasBounds.minX} ${pos.y - canvasBounds.minY}`;
+      
+      const path = new Path2D(displayPath);
       ctx.stroke(path);
     } else if (startPoint) {
       // For shapes, create preview
       const shapePath = createShapePath(drawingTool, startPoint, pos);
       if (shapePath) {
-        const path = new Path2D(shapePath);
+        // Convert to relative coordinates for display
+        const displayPath = shapePath.replace(/(\d+\.?\d*)/g, (match) => {
+          const num = parseFloat(match);
+          return (num - canvasBounds.minX).toString();
+        });
+        
+        const path = new Path2D(displayPath);
         ctx.stroke(path);
       }
     }

@@ -46,11 +46,17 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const [brushColor, setBrushColor] = useState('#000000');
   const [drawingTool, setDrawingTool] = useState('pen');
 
-  // Improved zoom and pan state
+  // Infinite canvas state
   const [scale, setScale] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 });
+  const [canvasBounds, setCanvasBounds] = useState({ 
+    minX: -5000, 
+    minY: -5000, 
+    maxX: 5000, 
+    maxY: 5000 
+  });
 
   // Optimized fetch with shorter refetch interval for real-time feel
   const { data: stickyNotes = [] } = useQuery({
@@ -123,6 +129,20 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     };
   }, [roomId, queryClient]);
 
+  // Update canvas bounds based on content
+  useEffect(() => {
+    const allElements = [...stickyNotes, ...textElements];
+    if (allElements.length === 0) return;
+
+    const positions = allElements.map(el => ({ x: el.x_position, y: el.y_position }));
+    const minX = Math.min(...positions.map(p => p.x)) - 1000;
+    const minY = Math.min(...positions.map(p => p.y)) - 1000;
+    const maxX = Math.max(...positions.map(p => p.x)) + 1000;
+    const maxY = Math.max(...positions.map(p => p.y)) + 1000;
+
+    setCanvasBounds({ minX, minY, maxX, maxY });
+  }, [stickyNotes, textElements]);
+
   // Improved zoom controls
   const zoomIn = useCallback(() => {
     setScale(prev => Math.min(prev * 1.2, 3));
@@ -141,7 +161,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      const delta = e.deltaY * -0.002; // Reduced sensitivity for smoother zoom
+      const delta = e.deltaY * -0.001;
       const newScale = Math.min(Math.max(0.1, scale + delta), 3);
       setScale(newScale);
     }
@@ -149,11 +169,11 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
   // Handle pan with space key for easier laptop use
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.code === 'Space' && !isPanning) {
+    if (e.code === 'Space' && !isPanning && currentTool === 'select') {
       e.preventDefault();
       document.body.style.cursor = 'grab';
     }
-  }, [isPanning]);
+  }, [isPanning, currentTool]);
 
   const handleKeyUp = useCallback((e: KeyboardEvent) => {
     if (e.code === 'Space') {
@@ -174,7 +194,8 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
   // Handle pan start
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (currentTool === 'select' && e.button === 0) {
+    if ((currentTool === 'select' || e.button === 1) && e.button !== 2) { // Middle mouse or select tool
+      e.preventDefault();
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
       document.body.style.cursor = 'grabbing';
@@ -204,16 +225,14 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     }
   }, [isPanning]);
 
-  // Fixed cursor position calculation
+  // Fixed cursor position calculation for infinite canvas
   const getCanvasPosition = useCallback((e: React.MouseEvent) => {
     const rect = whiteboardRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
 
-    // Get the exact cursor position relative to the whiteboard
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
-    // Convert to canvas coordinates accounting for zoom and pan
     const canvasX = (clientX - panOffset.x) / scale;
     const canvasY = (clientY - panOffset.y) / scale;
 
@@ -224,6 +243,15 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     if (currentTool === 'select' || currentTool === 'pen' || currentTool === 'eraser' || isPanning) return;
 
     const { x, y } = getCanvasPosition(e);
+
+    // Expand canvas bounds if needed
+    const expandedBounds = {
+      minX: Math.min(canvasBounds.minX, x - 1000),
+      minY: Math.min(canvasBounds.minY, y - 1000),
+      maxX: Math.max(canvasBounds.maxX, x + 1000),
+      maxY: Math.max(canvasBounds.maxY, y + 1000)
+    };
+    setCanvasBounds(expandedBounds);
 
     if (currentTool === 'sticky') {
       const tempNote = {
@@ -285,7 +313,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         console.error('Error creating text element:', error);
       }
     }
-  }, [currentTool, roomId, userName, queryClient, getCanvasPosition, isPanning]);
+  }, [currentTool, roomId, userName, queryClient, getCanvasPosition, isPanning, canvasBounds]);
 
   const getCursorClass = () => {
     switch (currentTool) {
@@ -303,11 +331,14 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       case 'sticky': return 'Click anywhere to add a sticky note';
       case 'pen': return `Draw with ${drawingTool} tool • Size: ${brushSize}px • Color: ${brushColor}`;
       case 'text': return 'Click anywhere to add text';
-      case 'select': return 'Drag to pan • Ctrl+Scroll to zoom • Double-click items to edit • Space+Drag to pan';
+      case 'select': return 'Drag to pan • Ctrl+Scroll to zoom • Double-click items to edit • Middle-click+Drag to pan';
       case 'eraser': return 'Draw to erase content';
       default: return '';
     }
   };
+
+  const canvasWidth = canvasBounds.maxX - canvasBounds.minX;
+  const canvasHeight = canvasBounds.maxY - canvasBounds.minY;
 
   return (
     <div
@@ -324,11 +355,11 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`,
           transformOrigin: '0 0',
-          width: '5000px', // Large fixed canvas size
-          height: '5000px',
+          width: `${canvasWidth}px`,
+          height: `${canvasHeight}px`,
           position: 'absolute',
-          top: '0px',
-          left: '0px',
+          top: `${canvasBounds.minY}px`,
+          left: `${canvasBounds.minX}px`,
         }}
       >
         {/* Drawing Canvas */}
@@ -339,6 +370,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           brushSize={brushSize}
           brushColor={brushColor}
           drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
+          canvasBounds={canvasBounds}
         />
 
         {/* Sticky Notes */}
@@ -361,6 +393,19 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           />
         ))}
       </div>
+
+      {/* Grid background for better orientation */}
+      <div 
+        className="absolute inset-0 pointer-events-none opacity-20"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, #ddd 1px, transparent 1px),
+            linear-gradient(to bottom, #ddd 1px, transparent 1px)
+          `,
+          backgroundSize: `${50 * scale}px ${50 * scale}px`,
+          backgroundPosition: `${panOffset.x % (50 * scale)}px ${panOffset.y % (50 * scale)}px`
+        }}
+      />
 
       {/* Zoom Controls */}
       <div className="absolute bottom-6 right-6 flex flex-col space-y-2 z-30">
@@ -413,7 +458,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           Collaborating as: {userName}
         </div>
         <div className="text-xs text-gray-500 mt-1">
-          Zoom: {Math.round(scale * 100)}% • Pan: ({Math.round(panOffset.x)}, {Math.round(panOffset.y)})
+          Zoom: {Math.round(scale * 100)}% • Canvas: {Math.round(canvasWidth)} x {Math.round(canvasHeight)}
         </div>
       </div>
     </div>
