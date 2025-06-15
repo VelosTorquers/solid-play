@@ -5,6 +5,8 @@ import { DrawingCanvas } from "./DrawingCanvas";
 import { DrawingToolbar } from "./DrawingToolbar";
 import { TextElement } from "./TextElement";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface WhiteboardProps {
   roomId: string;
@@ -43,7 +45,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const [brushColor, setBrushColor] = useState('#000000');
   const [drawingTool, setDrawingTool] = useState('pen');
 
-  // Zoom and pan state for infinite canvas
+  // Improved zoom and pan state
   const [scale, setScale] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -120,21 +122,61 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     };
   }, [roomId, queryClient]);
 
-  // Handle wheel zoom
+  // Improved zoom controls
+  const zoomIn = useCallback(() => {
+    setScale(prev => Math.min(prev * 1.2, 3));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setScale(prev => Math.max(prev / 1.2, 0.1));
+  }, []);
+
+  const resetView = useCallback(() => {
+    setScale(1);
+    setPanOffset({ x: 0, y: 0 });
+  }, []);
+
+  // Handle wheel zoom with better sensitivity
   const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey) {
+    if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      const delta = e.deltaY * -0.01;
+      const delta = e.deltaY * -0.005; // Reduced sensitivity for smoother zoom
       const newScale = Math.min(Math.max(0.1, scale + delta), 3);
       setScale(newScale);
     }
   }, [scale]);
+
+  // Handle pan with space key for easier laptop use
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.code === 'Space' && !isPanning) {
+      e.preventDefault();
+      document.body.style.cursor = 'grab';
+    }
+  }, [isPanning]);
+
+  const handleKeyUp = useCallback((e: KeyboardEvent) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      document.body.style.cursor = 'default';
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keyup', handleKeyUp);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keyup', handleKeyUp);
+      document.body.style.cursor = 'default';
+    };
+  }, [handleKeyDown, handleKeyUp]);
 
   // Handle pan start
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (currentTool === 'select' && e.button === 0) {
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
+      document.body.style.cursor = 'grabbing';
     }
   }, [currentTool]);
 
@@ -155,18 +197,32 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
   // Handle pan end
   const handleMouseUp = useCallback(() => {
-    setIsPanning(false);
-  }, []);
+    if (isPanning) {
+      setIsPanning(false);
+      document.body.style.cursor = 'default';
+    }
+  }, [isPanning]);
+
+  // Fixed cursor position calculation
+  const getCanvasPosition = useCallback((e: React.MouseEvent) => {
+    const rect = whiteboardRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+
+    // Get the exact cursor position relative to the whiteboard
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+
+    // Convert to canvas coordinates accounting for zoom and pan
+    const canvasX = (clientX - panOffset.x) / scale;
+    const canvasY = (clientY - panOffset.y) / scale;
+
+    return { x: canvasX, y: canvasY };
+  }, [scale, panOffset]);
 
   const handleWhiteboardClick = useCallback(async (e: React.MouseEvent) => {
     if (currentTool === 'select' || currentTool === 'pen' || isPanning) return;
 
-    const rect = whiteboardRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    // Calculate position accounting for zoom and pan
-    const x = (e.clientX - rect.left - panOffset.x) / scale;
-    const y = (e.clientY - rect.top - panOffset.y) / scale;
+    const { x, y } = getCanvasPosition(e);
 
     if (currentTool === 'sticky') {
       const tempNote = {
@@ -228,7 +284,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         console.error('Error creating text element:', error);
       }
     }
-  }, [currentTool, roomId, userName, queryClient, scale, panOffset, isPanning]);
+  }, [currentTool, roomId, userName, queryClient, getCanvasPosition, isPanning]);
 
   const getCursorClass = () => {
     switch (currentTool) {
@@ -236,6 +292,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       case 'pen': return 'cursor-crosshair';
       case 'text': return 'cursor-text';
       case 'select': return isPanning ? 'cursor-grabbing' : 'cursor-grab';
+      case 'eraser': return 'cursor-crosshair';
       default: return 'cursor-default';
     }
   };
@@ -245,7 +302,8 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       case 'sticky': return 'Click anywhere to add a sticky note';
       case 'pen': return `Draw with ${drawingTool} tool • Size: ${brushSize}px • Color: ${brushColor}`;
       case 'text': return 'Click anywhere to add text';
-      case 'select': return 'Drag to pan • Ctrl+Scroll to zoom • Double-click items to edit';
+      case 'select': return 'Drag to pan • Ctrl+Scroll to zoom • Double-click items to edit • Space+Drag to pan';
+      case 'eraser': return 'Draw to erase content';
       default: return '';
     }
   };
@@ -265,21 +323,21 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         style={{
           transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`,
           transformOrigin: '0 0',
-          width: '200%',
-          height: '200%',
+          width: '5000px', // Large fixed canvas size
+          height: '5000px',
           position: 'absolute',
-          top: '-50%',
-          left: '-50%',
+          top: '0px',
+          left: '0px',
         }}
       >
         {/* Drawing Canvas */}
         <DrawingCanvas 
           roomId={roomId} 
-          isActive={currentTool === 'pen'}
+          isActive={currentTool === 'pen' || currentTool === 'eraser'}
           userName={userName}
           brushSize={brushSize}
           brushColor={brushColor}
-          drawingTool={drawingTool}
+          drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
         />
 
         {/* Sticky Notes */}
@@ -301,6 +359,34 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
             isSelectable={currentTool === 'select'}
           />
         ))}
+      </div>
+
+      {/* Zoom Controls */}
+      <div className="absolute bottom-6 right-6 flex flex-col space-y-2 z-30">
+        <Button
+          onClick={zoomIn}
+          size="sm"
+          variant="outline"
+          className="w-10 h-10 bg-white/95 backdrop-blur-sm shadow-lg border"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </Button>
+        <Button
+          onClick={zoomOut}
+          size="sm"
+          variant="outline"
+          className="w-10 h-10 bg-white/95 backdrop-blur-sm shadow-lg border"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </Button>
+        <Button
+          onClick={resetView}
+          size="sm"
+          variant="outline"
+          className="w-10 h-10 bg-white/95 backdrop-blur-sm shadow-lg border"
+        >
+          <RotateCcw className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Drawing Toolbar */}
