@@ -4,6 +4,8 @@ import { StickyNote } from "./StickyNote";
 import { DrawingCanvas } from "./DrawingCanvas";
 import { DrawingToolbar } from "./DrawingToolbar";
 import { TextElement } from "./TextElement";
+import { UserCursor } from "./UserCursor";
+import { useUserPresence } from "@/hooks/useUserPresence";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,6 +41,9 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   const [userName] = useState(() => 
     localStorage.getItem('solid_username') || `User${Math.floor(Math.random() * 1000)}`
   );
+
+  // User presence and cursor tracking
+  const { users, updateCursor } = useUserPresence(roomId, userName);
 
   // Drawing state
   const [brushSize, setBrushSize] = useState(3);
@@ -184,6 +189,14 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   }, [currentTool]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    // Update cursor position for other users
+    const rect = whiteboardRef.current?.getBoundingClientRect();
+    if (rect) {
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      updateCursor(x, y);
+    }
+
     if (isPanning) {
       const deltaX = e.clientX - lastPanPoint.x;
       const deltaY = e.clientY - lastPanPoint.y;
@@ -195,7 +208,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       
       setLastPanPoint({ x: e.clientX, y: e.clientY });
     }
-  }, [isPanning, lastPanPoint]);
+  }, [isPanning, lastPanPoint, updateCursor]);
 
   const handleMouseUp = useCallback(() => {
     if (isPanning) {
@@ -318,6 +331,18 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           />
         ))}
       </div>
+
+      {/* User Cursors - Outside the transformed container so they stay in screen coordinates */}
+      {Object.values(users).map((user) => (
+        <UserCursor
+          key={user.userId}
+          userId={user.userId}
+          userName={user.userName}
+          x={user.x}
+          y={user.y}
+          color={user.color}
+        />
+      ))}
 
       {/* Grid background for better orientation */}
       <div 
