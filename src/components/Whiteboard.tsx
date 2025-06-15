@@ -192,9 +192,15 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     };
   }, [handleKeyDown, handleKeyUp]);
 
-  // Handle pan start
+  // Handle pan start - only allow panning when not interacting with elements
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((currentTool === 'select' || e.button === 1) && e.button !== 2) { // Middle mouse or select tool
+    // Don't pan if clicking on interactive elements or in select mode
+    const target = e.target as HTMLElement;
+    const isInteractiveElement = target.closest('[data-interactive="true"]');
+    
+    if (((currentTool === 'select' && e.code === 'Space') || e.button === 1) && 
+        e.button !== 2 && 
+        !isInteractiveElement) {
       e.preventDefault();
       setIsPanning(true);
       setLastPanPoint({ x: e.clientX, y: e.clientY });
@@ -233,6 +239,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     const clientX = e.clientX - rect.left;
     const clientY = e.clientY - rect.top;
 
+    // Convert screen coordinates to canvas coordinates
     const canvasX = (clientX - panOffset.x) / scale;
     const canvasY = (clientY - panOffset.y) / scale;
 
@@ -241,6 +248,11 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
   const handleWhiteboardClick = useCallback(async (e: React.MouseEvent) => {
     if (currentTool === 'select' || currentTool === 'pen' || currentTool === 'eraser' || isPanning) return;
+
+    // Don't create elements when clicking on existing elements
+    const target = e.target as HTMLElement;
+    const isInteractiveElement = target.closest('[data-interactive="true"]');
+    if (isInteractiveElement) return;
 
     const { x, y } = getCanvasPosition(e);
 
@@ -331,7 +343,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       case 'sticky': return 'Click anywhere to add a sticky note';
       case 'pen': return `Draw with ${drawingTool} tool • Size: ${brushSize}px • Color: ${brushColor}`;
       case 'text': return 'Click anywhere to add text';
-      case 'select': return 'Drag to pan • Ctrl+Scroll to zoom • Double-click items to edit • Middle-click+Drag to pan';
+      case 'select': return 'Double-click items to edit • Space+Drag or Middle-click+Drag to pan • Ctrl+Scroll to zoom';
       case 'eraser': return 'Draw to erase content';
       default: return '';
     }
@@ -375,22 +387,24 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
         {/* Sticky Notes */}
         {stickyNotes.map((note) => (
-          <StickyNote
-            key={note.id}
-            note={note}
-            roomId={roomId}
-            isSelectable={currentTool === 'select'}
-          />
+          <div key={note.id} data-interactive="true">
+            <StickyNote
+              note={note}
+              roomId={roomId}
+              isSelectable={currentTool === 'select'}
+            />
+          </div>
         ))}
 
         {/* Text Elements */}
         {textElements.map((element) => (
-          <TextElement
-            key={element.id}
-            element={element}
-            roomId={roomId}
-            isSelectable={currentTool === 'select'}
-          />
+          <div key={element.id} data-interactive="true">
+            <TextElement
+              element={element}
+              roomId={roomId}
+              isSelectable={currentTool === 'select'}
+            />
+          </div>
         ))}
       </div>
 
@@ -461,6 +475,20 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           Zoom: {Math.round(scale * 100)}% • Canvas: {Math.round(canvasWidth)} x {Math.round(canvasHeight)}
         </div>
       </div>
+
+      {/* Custom eraser cursor when eraser tool is active */}
+      {currentTool === 'eraser' && (
+        <div 
+          className="pointer-events-none fixed z-50 rounded-full border-2 border-red-500 bg-red-100/50"
+          style={{
+            width: `${brushSize * 2}px`,
+            height: `${brushSize * 2}px`,
+            transform: 'translate(-50%, -50%)',
+            left: '50%',
+            top: '50%'
+          }}
+        />
+      )}
     </div>
   );
 }

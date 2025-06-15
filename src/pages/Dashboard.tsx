@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +27,28 @@ export default function Dashboard() {
   const [joinRoomCode, setJoinRoomCode] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+
+  // Get display name from user
+  const getDisplayName = () => {
+    if (!user) return 'User';
+    
+    // Try to get name from metadata first
+    if (user.user_metadata?.full_name) {
+      return user.user_metadata.full_name;
+    }
+    
+    // Try to get first name
+    if (user.user_metadata?.first_name) {
+      return user.user_metadata.first_name;
+    }
+    
+    // Fall back to username from email
+    if (user.email) {
+      return user.email.split('@')[0];
+    }
+    
+    return 'User';
+  };
 
   useEffect(() => {
     if (!loading && !user) {
@@ -251,7 +272,7 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">Welcome, {user?.email}</span>
+            <span className="text-sm text-gray-600">Welcome, {getDisplayName()}</span>
             <Button variant="outline" onClick={handleSignOut}>
               <LogOut className="h-4 w-4 mr-2" />
               Sign Out
