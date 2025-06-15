@@ -24,6 +24,7 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: element.x_position, y: element.y_position });
   const [lastTap, setLastTap] = useState(0);
   const [fontSize, setFontSize] = useState(element.font_size);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -31,7 +32,8 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
   useEffect(() => {
     setContent(element.content);
     setFontSize(element.font_size);
-  }, [element.content, element.font_size]);
+    setPosition({ x: element.x_position, y: element.y_position });
+  }, [element.content, element.font_size, element.x_position, element.y_position]);
 
   const handleContentSave = useCallback(async () => {
     if (content.trim() !== element.content || fontSize !== element.font_size) {
@@ -54,39 +56,46 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
       .eq('id', element.id);
   }, [element.id]);
 
+  const updatePosition = useCallback(async (newX: number, newY: number) => {
+    await supabase
+      .from('text_elements')
+      .update({ 
+        x_position: newX, 
+        y_position: newY 
+      })
+      .eq('id', element.id);
+  }, [element.id]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!isSelectable || isEditing) return;
     
+    // Don't start dragging if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('textarea')) return;
+    
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
     setDragStart({
-      x: e.clientX,
-      y: e.clientY,
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
     });
-  }, [isSelectable, isEditing]);
+  }, [isSelectable, isEditing, position]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
-    const deltaX = e.clientX - dragStart.x;
-    const deltaY = e.clientY - dragStart.y;
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
     
-    // Update position in database immediately for real-time collaboration
-    supabase
-      .from('text_elements')
-      .update({ 
-        x_position: element.x_position + deltaX, 
-        y_position: element.y_position + deltaY 
-      })
-      .eq('id', element.id);
-      
-    setDragStart({ x: e.clientX, y: e.clientY });
-  }, [isDragging, dragStart, element.x_position, element.y_position, element.id]);
+    setPosition({ x: newX, y: newY });
+  }, [isDragging, dragStart]);
 
   const handleMouseUp = useCallback(() => {
     if (!isDragging) return;
     setIsDragging(false);
-  }, [isDragging]);
+    updatePosition(position.x, position.y);
+  }, [isDragging, position, updatePosition]);
 
   useEffect(() => {
     if (isDragging) {
@@ -105,10 +114,8 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
     const now = Date.now();
     const timeSinceLastTap = now - lastTap;
     
-    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-      if (!isDragging) {
-        setIsEditing(true);
-      }
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0 && !isDragging) {
+      setIsEditing(true);
     }
     
     setLastTap(now);
@@ -140,6 +147,12 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
       className={`group transition-all duration-200 ${
         isSelectable ? 'cursor-move' : 'cursor-text'
       } ${isDragging ? 'opacity-75 z-50' : 'hover:scale-105'}`}
+      style={{
+        position: 'absolute',
+        left: position.x,
+        top: position.y,
+        transform: isDragging ? 'rotate(2deg)' : 'none'
+      }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
     >

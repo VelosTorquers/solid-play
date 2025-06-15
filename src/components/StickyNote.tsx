@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Heart, X } from "lucide-react";
@@ -31,12 +32,15 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: note.x_position, y: note.y_position });
   const [lastTap, setLastTap] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const noteRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setContent(note.content);
-  }, [note.content]);
+    setPosition({ x: note.x_position, y: note.y_position });
+  }, [note.content, note.x_position, note.y_position]);
 
   const handleContentSave = useCallback(async () => {
     if (content.trim() !== note.content) {
@@ -71,39 +75,46 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
       .eq('id', note.id);
   }, [note.id]);
 
+  const updatePosition = useCallback(async (newX: number, newY: number) => {
+    await supabase
+      .from('sticky_notes')
+      .update({ 
+        x_position: newX, 
+        y_position: newY 
+      })
+      .eq('id', note.id);
+  }, [note.id]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!isSelectable || isEditing) return;
     
+    // Don't start dragging if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('textarea')) return;
+    
     e.preventDefault();
+    e.stopPropagation();
     setIsDragging(true);
     setDragStart({
-      x: e.clientX,
-      y: e.clientY,
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
     });
-  }, [isSelectable, isEditing]);
+  }, [isSelectable, isEditing, position]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging) return;
     
-    const deltaX = e.clientX - dragStart.x;
-    const deltaY = e.clientY - dragStart.y;
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
     
-    // Update position in database immediately for real-time collaboration
-    supabase
-      .from('sticky_notes')
-      .update({ 
-        x_position: note.x_position + deltaX, 
-        y_position: note.y_position + deltaY 
-      })
-      .eq('id', note.id);
-      
-    setDragStart({ x: e.clientX, y: e.clientY });
-  }, [isDragging, dragStart, note.x_position, note.y_position, note.id]);
+    setPosition({ x: newX, y: newY });
+  }, [isDragging, dragStart]);
 
   const handleMouseUp = useCallback(() => {
     if (!isDragging) return;
     setIsDragging(false);
-  }, [isDragging]);
+    updatePosition(position.x, position.y);
+  }, [isDragging, position, updatePosition]);
 
   useEffect(() => {
     if (isDragging) {
@@ -122,10 +133,8 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
     const now = Date.now();
     const timeSinceLastTap = now - lastTap;
     
-    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-      if (!isDragging) {
-        setIsEditing(true);
-      }
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0 && !isDragging) {
+      setIsEditing(true);
     }
     
     setLastTap(now);
@@ -143,11 +152,18 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
 
   return (
     <div
+      ref={noteRef}
       className={`w-48 min-h-32 p-3 border-2 rounded-lg shadow-lg transition-all duration-200 group ${
         colorClasses[note.color as keyof typeof colorClasses] || colorClasses.yellow
       } ${isSelectable ? 'cursor-move hover:shadow-xl' : 'cursor-pointer hover:shadow-md'} ${
         isDragging ? 'opacity-75 scale-105 z-50' : 'hover:scale-102'
       }`}
+      style={{
+        position: 'absolute',
+        left: position.x,
+        top: position.y,
+        transform: isDragging ? 'rotate(5deg)' : 'none'
+      }}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
     >
