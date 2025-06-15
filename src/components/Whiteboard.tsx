@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StickyNote } from "./StickyNote";
@@ -9,7 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface WhiteboardProps {
   roomId: string;
-  currentTool: 'sticky' | 'pen' | 'text' | 'select';
+  currentTool: 'sticky' | 'pen' | 'text' | 'select' | 'eraser';
 }
 
 interface StickyNoteType {
