@@ -1,3 +1,4 @@
+
 import { useRef, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,7 +43,6 @@ export function DrawingCanvas({
   const [isDrawing, setIsDrawing] = useState(false);
   const [currentPath, setCurrentPath] = useState<string>('');
   const [startPoint, setStartPoint] = useState<{x: number, y: number} | null>(null);
-  const [isErasing, setIsErasing] = useState(false);
   const [mousePos, setMousePos] = useState<{x: number, y: number}>({x: 0, y: 0});
   const queryClient = useQueryClient();
 
@@ -83,17 +83,22 @@ export function DrawingCanvas({
     };
   }, [roomId, queryClient]);
 
-  // Resize canvas to match bounds
+  // Resize canvas to fill the entire viewport
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const width = canvasBounds.maxX - canvasBounds.minX;
-    const height = canvasBounds.maxY - canvasBounds.minY;
+    const resizeCanvas = () => {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    };
+
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
     
-    canvas.width = width;
-    canvas.height = height;
-  }, [canvasBounds]);
+    return () => window.removeEventListener('resize', resizeCanvas);
+  }, []);
 
   // Redraw canvas when drawings change
   useEffect(() => {
@@ -107,57 +112,73 @@ export function DrawingCanvas({
 
     drawings.forEach((drawing) => {
       try {
-        const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
-          const num = parseFloat(match);
-          return (num - canvasBounds.minX).toString();
-        });
+        // Parse the path data and transform it to screen coordinates
+        const transformedPath = transformPathToScreen(drawing.path_data);
         
-        const path = new Path2D(adjustedPathData);
-        ctx.strokeStyle = drawing.color;
-        ctx.lineWidth = drawing.stroke_width;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke(path);
+        if (transformedPath) {
+          const path = new Path2D(transformedPath);
+          ctx.strokeStyle = drawing.color;
+          ctx.lineWidth = drawing.stroke_width;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke(path);
+        }
       } catch (error) {
         console.error('Error drawing path:', error);
       }
     });
-  }, [drawings, canvasBounds]);
+  }, [drawings, scale, panOffset]);
 
-  // Fixed mouse position calculation that accounts for canvas transform
+  // Transform world coordinates to screen coordinates
+  const worldToScreen = (worldX: number, worldY: number) => {
+    return {
+      x: worldX * scale + panOffset.x,
+      y: worldY * scale + panOffset.y
+    };
+  };
+
+  // Transform screen coordinates to world coordinates
+  const screenToWorld = (screenX: number, screenY: number) => {
+    return {
+      x: (screenX - panOffset.x) / scale,
+      y: (screenY - panOffset.y) / scale
+    };
+  };
+
+  // Transform path data from world coordinates to screen coordinates
+  const transformPathToScreen = (pathData: string): string => {
+    return pathData.replace(/([ML])\s*([+-]?\d*\.?\d+)\s*([+-]?\d*\.?\d+)/g, (match, command, x, y) => {
+      const worldX = parseFloat(x);
+      const worldY = parseFloat(y);
+      const screen = worldToScreen(worldX, worldY);
+      return `${command} ${screen.x} ${screen.y}`;
+    });
+  };
+
+  // Transform path data from screen coordinates to world coordinates
+  const transformPathToWorld = (pathData: string): string => {
+    return pathData.replace(/([ML])\s*([+-]?\d*\.?\d+)\s*([+-]?\d*\.?\d+)/g, (match, command, x, y) => {
+      const screenX = parseFloat(x);
+      const screenY = parseFloat(y);
+      const world = screenToWorld(screenX, screenY);
+      return `${command} ${world.x} ${world.y}`;
+    });
+  };
+
   const getMousePos = (e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
     const rect = canvas.getBoundingClientRect();
-    
-    // Get the mouse position relative to the viewport
-    const clientX = e.clientX;
-    const clientY = e.clientY;
-    
-    // Convert to world coordinates accounting for pan and zoom
-    const worldX = (clientX - rect.left - panOffset.x) / scale;
-    const worldY = (clientY - rect.top - panOffset.y) / scale;
-    
-    console.log('Mouse position calculation:', {
-      client: { x: clientX, y: clientY },
-      rect: { left: rect.left, top: rect.top },
-      panOffset,
-      scale,
-      world: { x: worldX, y: worldY }
-    });
-    
-    return { x: worldX, y: worldY };
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (rect) {
-      setMousePos({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
-      });
-    }
+    const pos = getMousePos(e);
+    setMousePos(pos);
 
     if (!isDrawing || !isActive) return;
 
@@ -167,33 +188,31 @@ export function DrawingCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const pos = getMousePos(e);
-
     if (drawingTool === 'eraser') {
       handleErase(pos);
       return;
     }
 
+    // Clear and redraw all existing drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     drawings.forEach((drawing) => {
       try {
-        const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
-          const num = parseFloat(match);
-          return (num - canvasBounds.minX).toString();
-        });
-        
-        const existingPath = new Path2D(adjustedPathData);
-        ctx.strokeStyle = drawing.color;
-        ctx.lineWidth = drawing.stroke_width;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke(existingPath);
+        const transformedPath = transformPathToScreen(drawing.path_data);
+        if (transformedPath) {
+          const existingPath = new Path2D(transformedPath);
+          ctx.strokeStyle = drawing.color;
+          ctx.lineWidth = drawing.stroke_width;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke(existingPath);
+        }
       } catch (error) {
         console.error('Error redrawing existing path:', error);
       }
     });
 
+    // Draw current stroke
     ctx.strokeStyle = brushColor;
     ctx.lineWidth = brushSize;
     ctx.lineCap = 'round';
@@ -201,22 +220,12 @@ export function DrawingCanvas({
 
     if (drawingTool === 'pen') {
       setCurrentPath(prev => `${prev} L ${pos.x} ${pos.y}`);
-      const displayPath = currentPath.replace(/(\d+\.?\d*)/g, (match) => {
-        const num = parseFloat(match);
-        return (num - canvasBounds.minX).toString();
-      }) + ` L ${pos.x - canvasBounds.minX} ${pos.y - canvasBounds.minY}`;
-      
-      const path = new Path2D(displayPath);
+      const path = new Path2D(currentPath + ` L ${pos.x} ${pos.y}`);
       ctx.stroke(path);
     } else if (startPoint) {
       const shapePath = createShapePath(drawingTool, startPoint, pos);
       if (shapePath) {
-        const displayPath = shapePath.replace(/(\d+\.?\d*)/g, (match) => {
-          const num = parseFloat(match);
-          return (num - canvasBounds.minX).toString();
-        });
-        
-        const path = new Path2D(displayPath);
+        const path = new Path2D(shapePath);
         ctx.stroke(path);
       }
     }
@@ -272,21 +281,17 @@ export function DrawingCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const relativeX = pos.x - canvasBounds.minX;
-    const relativeY = pos.y - canvasBounds.minY;
-
+    // Check which drawings intersect with the eraser position
     drawings.forEach((drawing) => {
       try {
-        const adjustedPathData = drawing.path_data.replace(/(\d+\.?\d*)/g, (match) => {
-          const num = parseFloat(match);
-          return (num - canvasBounds.minX).toString();
-        });
-        
-        const path = new Path2D(adjustedPathData);
-        ctx.lineWidth = drawing.stroke_width + 10;
-        
-        if (ctx.isPointInStroke && ctx.isPointInStroke(path, relativeX, relativeY)) {
-          drawingsToDelete.push(drawing.id);
+        const transformedPath = transformPathToScreen(drawing.path_data);
+        if (transformedPath) {
+          const path = new Path2D(transformedPath);
+          ctx.lineWidth = drawing.stroke_width + brushSize;
+          
+          if (ctx.isPointInStroke && ctx.isPointInStroke(path, pos.x, pos.y)) {
+            drawingsToDelete.push(drawing.id);
+          }
         }
       } catch (error) {
         console.error('Error checking path for erasing:', error);
@@ -312,10 +317,7 @@ export function DrawingCanvas({
     setIsDrawing(true);
     setStartPoint(pos);
 
-    console.log('Starting to draw at:', pos);
-
     if (drawingTool === 'eraser') {
-      setIsErasing(true);
       handleErase(pos);
     } else if (drawingTool === 'pen') {
       setCurrentPath(`M ${pos.x} ${pos.y}`);
@@ -326,7 +328,6 @@ export function DrawingCanvas({
     if (!isDrawing) return;
 
     setIsDrawing(false);
-    setIsErasing(false);
     
     if (drawingTool === 'eraser') {
       setCurrentPath('');
@@ -344,11 +345,12 @@ export function DrawingCanvas({
     }
 
     if (pathToSave) {
-      console.log('Saving drawing with path:', pathToSave);
+      // Transform screen coordinates to world coordinates before saving
+      const worldPath = transformPathToWorld(pathToSave);
       
       const { error } = await supabase.from('drawings').insert({
         room_id: roomId,
-        path_data: pathToSave,
+        path_data: worldPath,
         color: brushColor,
         stroke_width: brushSize,
         created_by: userName,
@@ -388,10 +390,10 @@ export function DrawingCanvas({
         <div
           className="pointer-events-none absolute rounded-full border-2 border-red-500 bg-red-100/50 z-10"
           style={{
-            width: `${brushSize * 3}px`,
-            height: `${brushSize * 3}px`,
-            left: `${mousePos.x - (brushSize * 1.5)}px`,
-            top: `${mousePos.y - (brushSize * 1.5)}px`,
+            width: `${brushSize * 2}px`,
+            height: `${brushSize * 2}px`,
+            left: `${mousePos.x - brushSize}px`,
+            top: `${mousePos.y - brushSize}px`,
             transform: 'translate(0, 0)'
           }}
         />

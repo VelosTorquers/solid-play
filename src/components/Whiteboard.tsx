@@ -193,6 +193,11 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     const target = e.target as HTMLElement;
     const isInteractiveElement = target.closest('[data-interactive="true"]');
     
+    // Allow drawing tools to work without interference
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+      return;
+    }
+    
     if ((currentTool === 'select' || e.button === 1) && 
         e.button !== 2 && 
         !isInteractiveElement) {
@@ -249,8 +254,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
 
     const { x, y } = getCanvasPosition(e);
 
-    console.log('Creating element at:', { x, y, tool: currentTool });
-
     // Expand canvas bounds if needed
     const expandedBounds = {
       minX: Math.min(canvasBounds.minX, x - 1000),
@@ -288,7 +291,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         console.error('Error creating text element:', error);
       }
     }
-  }, [currentTool, roomId, userName, queryClient, getCanvasPosition, isPanning, canvasBounds]);
+  }, [currentTool, roomId, userName, getCanvasPosition, isPanning, canvasBounds]);
 
   const getCursorClass = () => {
     switch (currentTool) {
@@ -325,6 +328,19 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       onMouseUp={handleMouseUp}
       onWheel={handleWheel}
     >
+      {/* Drawing Canvas - Now positioned at the top level to capture all drawing events */}
+      <DrawingCanvas 
+        roomId={roomId} 
+        isActive={currentTool === 'pen' || currentTool === 'eraser'}
+        userName={userName}
+        brushSize={brushSize}
+        brushColor={brushColor}
+        drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
+        canvasBounds={canvasBounds}
+        scale={scale}
+        panOffset={panOffset}
+      />
+
       {/* Infinite canvas container */}
       <div
         style={{
@@ -333,21 +349,9 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
           width: `${canvasWidth}px`,
           height: `${canvasHeight}px`,
           position: 'absolute',
+          pointerEvents: currentTool === 'pen' || currentTool === 'eraser' ? 'none' : 'auto'
         }}
       >
-        {/* Drawing Canvas */}
-        <DrawingCanvas 
-          roomId={roomId} 
-          isActive={currentTool === 'pen' || currentTool === 'eraser'}
-          userName={userName}
-          brushSize={brushSize}
-          brushColor={brushColor}
-          drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
-          canvasBounds={canvasBounds}
-          scale={scale}
-          panOffset={panOffset}
-        />
-
         {/* Sticky Notes */}
         {stickyNotes.map((note) => (
           <div 
