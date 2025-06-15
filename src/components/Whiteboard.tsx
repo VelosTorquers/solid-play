@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 
 interface WhiteboardProps {
   roomId: string;
-  currentTool: 'sticky' | 'pen' | 'text' | 'select' | 'eraser';
+  currentTool: 'sticky' | 'pen' | 'text' | 'select' | 'eraser' | 'pan';
 }
 
 interface StickyNoteType {
@@ -163,30 +163,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
     }
   }, [scale]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.code === 'Space' && !isPanning && currentTool === 'select') {
-      e.preventDefault();
-      document.body.style.cursor = 'grab';
-    }
-  }, [isPanning, currentTool]);
-
-  const handleKeyUp = useCallback((e: KeyboardEvent) => {
-    if (e.code === 'Space') {
-      e.preventDefault();
-      document.body.style.cursor = 'default';
-    }
-  }, []);
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
-      document.body.style.cursor = 'default';
-    };
-  }, [handleKeyDown, handleKeyUp]);
-
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
     const isInteractiveElement = target.closest('[data-interactive="true"]');
@@ -196,7 +172,8 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       return;
     }
     
-    if ((currentTool === 'select' || e.button === 1) && 
+    // Pan tool or middle mouse button for panning
+    if ((currentTool === 'pan' || e.button === 1) && 
         e.button !== 2 && 
         !isInteractiveElement) {
       e.preventDefault();
@@ -238,7 +215,7 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
   }, []);
 
   const handleWhiteboardClick = useCallback(async (e: React.MouseEvent) => {
-    if (currentTool === 'select' || currentTool === 'pen' || currentTool === 'eraser' || isPanning) return;
+    if (currentTool === 'select' || currentTool === 'pen' || currentTool === 'eraser' || currentTool === 'pan' || isPanning) return;
 
     // Don't create elements when clicking on existing elements
     const target = e.target as HTMLElement;
@@ -282,25 +259,12 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       case 'sticky': return 'cursor-copy';
       case 'pen': return 'cursor-crosshair';
       case 'text': return 'cursor-text';
-      case 'select': return isPanning ? 'cursor-grabbing' : 'cursor-grab';
+      case 'select': return 'cursor-default';
       case 'eraser': return 'cursor-crosshair';
+      case 'pan': return isPanning ? 'cursor-grabbing' : 'cursor-grab';
       default: return 'cursor-default';
     }
   };
-
-  const getToolInstruction = () => {
-    switch (currentTool) {
-      case 'sticky': return 'Click anywhere to add a sticky note';
-      case 'pen': return `Draw with ${drawingTool} tool • Size: ${brushSize}px • Color: ${brushColor}`;
-      case 'text': return 'Click anywhere to add text';
-      case 'select': return 'Double-click items to edit • Drag to move • Space+Drag or Middle-click+Drag to pan • Ctrl+Scroll to zoom';
-      case 'eraser': return 'Draw to erase content';
-      default: return '';
-    }
-  };
-
-  const canvasWidth = canvasBounds.maxX - canvasBounds.minX;
-  const canvasHeight = canvasBounds.maxY - canvasBounds.minY;
 
   return (
     <div
@@ -313,37 +277,47 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
       onWheel={handleWheel}
     >
       {/* Drawing Canvas */}
-      <DrawingCanvas 
-        roomId={roomId} 
-        isActive={currentTool === 'pen' || currentTool === 'eraser'}
-        userName={userName}
-        brushSize={brushSize}
-        brushColor={brushColor}
-        drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
-        canvasBounds={canvasBounds}
-        scale={scale}
-        panOffset={panOffset}
-      />
-
-      {/* Sticky Notes - now positioned absolutely by the component itself */}
-      {stickyNotes.map((note) => (
-        <StickyNote
-          key={note.id}
-          note={note}
-          roomId={roomId}
-          isSelectable={currentTool === 'select'}
+      <div
+        style={{
+          transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${scale})`,
+          transformOrigin: '0 0',
+          position: 'absolute',
+          width: '100%',
+          height: '100%'
+        }}
+      >
+        <DrawingCanvas 
+          roomId={roomId} 
+          isActive={currentTool === 'pen' || currentTool === 'eraser'}
+          userName={userName}
+          brushSize={brushSize}
+          brushColor={brushColor}
+          drawingTool={currentTool === 'eraser' ? 'eraser' : drawingTool}
+          canvasBounds={canvasBounds}
+          scale={1}
+          panOffset={{ x: 0, y: 0 }}
         />
-      ))}
 
-      {/* Text Elements - now positioned absolutely by the component itself */}
-      {textElements.map((element) => (
-        <TextElement
-          key={element.id}
-          element={element}
-          roomId={roomId}
-          isSelectable={currentTool === 'select'}
-        />
-      ))}
+        {/* Sticky Notes */}
+        {stickyNotes.map((note) => (
+          <StickyNote
+            key={note.id}
+            note={note}
+            roomId={roomId}
+            isSelectable={currentTool === 'select'}
+          />
+        ))}
+
+        {/* Text Elements */}
+        {textElements.map((element) => (
+          <TextElement
+            key={element.id}
+            element={element}
+            roomId={roomId}
+            isSelectable={currentTool === 'select'}
+          />
+        ))}
+      </div>
 
       {/* Grid background for better orientation */}
       <div 
@@ -396,22 +370,6 @@ export function Whiteboard({ roomId, currentTool }: WhiteboardProps) {
         onBrushColorChange={setBrushColor}
         onToolChange={setDrawingTool}
       />
-
-      {/* Tool instruction */}
-      <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm px-4 py-3 rounded-lg shadow-lg border z-30">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-sm font-medium text-gray-700">
-            {getToolInstruction()}
-          </span>
-        </div>
-        <div className="text-xs text-gray-500 mt-1">
-          Collaborating as: {userName}
-        </div>
-        <div className="text-xs text-gray-500 mt-1">
-          Zoom: {Math.round(scale * 100)}% • Canvas: {Math.round(canvasWidth)} x {Math.round(canvasHeight)}
-        </div>
-      </div>
 
       {/* Custom eraser cursor when eraser tool is active */}
       {currentTool === 'eraser' && (

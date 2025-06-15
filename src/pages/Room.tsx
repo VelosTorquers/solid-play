@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 const Room = () => {
   const { roomId } = useParams();
   const [roomExists, setRoomExists] = useState<boolean | null>(null);
-  const [tool, setTool] = useState<'sticky' | 'pen' | 'text' | 'select' | 'eraser'>('sticky');
+  const [tool, setTool] = useState<'sticky' | 'pen' | 'text' | 'select' | 'eraser' | 'pan'>('select');
 
   useEffect(() => {
     const checkRoom = async () => {
