@@ -32,6 +32,7 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: note.x_position, y: note.y_position });
+  const [lastTap, setLastTap] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -97,7 +98,6 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
     
     setIsDragging(false);
     
-    // Update database with final position
     await supabase
       .from('sticky_notes')
       .update({ 
@@ -120,10 +120,19 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDragging && !isSelectable) {
-      setIsEditing(true);
+    
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTap;
+    
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      // Double tap detected
+      if (!isDragging) {
+        setIsEditing(true);
+      }
     }
-  }, [isDragging, isSelectable]);
+    
+    setLastTap(now);
+  }, [isDragging, lastTap]);
 
   return (
     <div
@@ -170,11 +179,11 @@ export function StickyNote({ note, roomId, isSelectable }: StickyNoteProps) {
           }}
           className="w-full h-20 bg-transparent border-none outline-none resize-none text-sm placeholder:text-gray-500"
           autoFocus
-          placeholder="Type your idea..."
+          placeholder="Enter your idea..."
         />
       ) : (
         <div className="text-sm whitespace-pre-wrap min-h-20 break-words">
-          {content}
+          {content || 'Double-tap to add your idea'}
         </div>
       )}
 

@@ -95,6 +95,39 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_whiteboards: {
+        Row: {
+          created_at: string
+          id: string
+          is_public: boolean
+          room_id: string
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          room_id: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          room_id?: string
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       sticky_notes: {
         Row: {
           color: string | null
@@ -185,6 +218,38 @@ export type Database = {
             columns: ["room_id"]
             isOneToOne: false
             referencedRelation: "rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whiteboard_collaborators: {
+        Row: {
+          created_at: string
+          id: string
+          permission: string
+          user_id: string
+          whiteboard_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          permission?: string
+          user_id: string
+          whiteboard_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          permission?: string
+          user_id?: string
+          whiteboard_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whiteboard_collaborators_whiteboard_id_fkey"
+            columns: ["whiteboard_id"]
+            isOneToOne: false
+            referencedRelation: "saved_whiteboards"
             referencedColumns: ["id"]
           },
         ]

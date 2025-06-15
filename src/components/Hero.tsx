@@ -87,6 +87,7 @@ export function Hero() {
               placeholder="Enter your name"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createRoom()}
               className="w-full text-center text-lg bg-white/10 border-white/20 text-white placeholder:text-gray-400 backdrop-blur-sm"
               maxLength={30}
             />
@@ -108,7 +109,7 @@ export function Hero() {
             className="mt-12 text-gray-400"
           >
             <p>Sessions auto-expire in 24 hours • Complete privacy • No data stored</p>
-          </motion.div>
+          </div>
         </motion.div>
       </div>
     </section>

@@ -1,10 +1,10 @@
 
 import { Button } from "@/components/ui/button";
-import { StickyNote, Pen, Type, MousePointer } from "lucide-react";
+import { StickyNote, Pen, Type, MousePointer, Eraser } from "lucide-react";
 
 interface ToolbarProps {
-  currentTool: 'sticky' | 'pen' | 'text' | 'select';
-  onToolChange: (tool: 'sticky' | 'pen' | 'text' | 'select') => void;
+  currentTool: 'sticky' | 'pen' | 'text' | 'select' | 'eraser';
+  onToolChange: (tool: 'sticky' | 'pen' | 'text' | 'select' | 'eraser') => void;
 }
 
 export function Toolbar({ currentTool, onToolChange }: ToolbarProps) {
@@ -12,6 +12,7 @@ export function Toolbar({ currentTool, onToolChange }: ToolbarProps) {
     { id: 'select' as const, icon: MousePointer, label: 'Select' },
     { id: 'sticky' as const, icon: StickyNote, label: 'Sticky Note' },
     { id: 'pen' as const, icon: Pen, label: 'Draw' },
+    { id: 'eraser' as const, icon: Eraser, label: 'Eraser' },
     { id: 'text' as const, icon: Type, label: 'Text' },
   ];
 

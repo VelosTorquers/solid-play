@@ -10,7 +10,7 @@ import { toast } from "@/hooks/use-toast";
 const Room = () => {
   const { roomId } = useParams();
   const [roomExists, setRoomExists] = useState<boolean | null>(null);
-  const [tool, setTool] = useState<'sticky' | 'pen' | 'text' | 'select'>('sticky');
+  const [tool, setTool] = useState<'sticky' | 'pen' | 'text' | 'select' | 'eraser'>('sticky');
 
   useEffect(() => {
     const checkRoom = async () => {
@@ -33,7 +33,6 @@ const Room = () => {
         return;
       }
 
-      // Check if room has expired
       if (new Date(data.expires_at) < new Date()) {
         setRoomExists(false);
         toast({

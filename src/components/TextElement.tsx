@@ -24,6 +24,7 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: element.x_position, y: element.y_position });
+  const [lastTap, setLastTap] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -74,7 +75,6 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
     
     setIsDragging(false);
     
-    // Update database with final position
     await supabase
       .from('text_elements')
       .update({ 
@@ -97,10 +97,19 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isDragging && !isSelectable) {
-      setIsEditing(true);
+    
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTap;
+    
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      // Double tap detected
+      if (!isDragging) {
+        setIsEditing(true);
+      }
     }
-  }, [isDragging, isSelectable]);
+    
+    setLastTap(now);
+  }, [isDragging, lastTap]);
 
   return (
     <div
@@ -126,23 +135,24 @@ export function TextElement({ element, roomId, isSelectable }: TextElementProps)
               setIsEditing(false);
             }
           }}
-          className="bg-transparent border-none outline-none min-w-24 px-1 py-1 rounded border-2 border-dashed border-blue-300 bg-blue-50"
+          className="bg-white border-2 border-blue-400 outline-none min-w-24 px-3 py-2 rounded-md shadow-lg"
           style={{ 
             fontSize: `${element.font_size}px`, 
             color: element.color,
-            minWidth: '100px'
+            minWidth: '120px'
           }}
           autoFocus
+          placeholder="Enter text..."
         />
       ) : (
         <div
-          className="whitespace-nowrap px-1 py-1 rounded hover:bg-gray-100 transition-colors"
+          className="whitespace-nowrap px-3 py-2 rounded-md bg-white border-2 border-gray-200 shadow-md hover:shadow-lg transition-all duration-200 min-w-24"
           style={{ 
             fontSize: `${element.font_size}px`, 
             color: element.color 
           }}
         >
-          {content}
+          {content || 'Double-tap to edit'}
         </div>
       )}
 
